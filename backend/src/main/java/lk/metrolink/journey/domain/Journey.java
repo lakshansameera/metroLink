@@ -15,7 +15,6 @@ public class Journey {
     private Long fareCharged;
     private JourneyState state;
 
-
     public Journey(long journeyId, long ticketId, String routeNo, String boardingStopId, Instant tapInTime, String exitStopId, Instant tapOutTime, Long fareDue, Long fareCharged, JourneyState state) {
         this.journeyId = journeyId;
         this.ticketId = ticketId;
@@ -30,7 +29,7 @@ public class Journey {
     }
 
     public static Journey start(long ticketId, String routeNo, String boardingStopId, Instant tapInTime) {
-        return new Journey(0, ticketId, routeNo, boardingStopId,tapInTime, null, null, null,0L,
+        return new Journey(0, ticketId, routeNo, boardingStopId, tapInTime, null, null, null, null,
                 new InProgressState());
     }
 
@@ -41,7 +40,6 @@ public class Journey {
     public boolean isOpen() {
         return state.isOpen();
     }
-
 
     public void recordExit(String exitStopId, Instant tapOutTime, long fareDue) {
         state = state.recordExit(journeyId);
@@ -68,5 +66,45 @@ public class Journey {
         requireExitRecorded();
         this.fareCharged = fareCharged;
         state = next;
+    }
+
+    public long getJourneyId() {
+        return journeyId;
+    }
+
+    public long getTicketId() {
+        return ticketId;
+    }
+
+    public String getRouteNo() {
+        return routeNo;
+    }
+
+    public String getBoardingStopId() {
+        return boardingStopId;
+    }
+
+    public Instant getTapInTime() {
+        return tapInTime;
+    }
+
+    public String getExitStopId() {
+        return exitStopId;
+    }
+
+    public Instant getTapOutTime() {
+        return tapOutTime;
+    }
+
+    public Long getFareDue() {
+        return fareDue;
+    }
+
+    public Long getFareCharged() {
+        return fareCharged;
+    }
+
+    public JourneyState getState() {
+        return state;
     }
 }

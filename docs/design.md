@@ -9,7 +9,7 @@ Only the classes this sequence touches.
 | `Passenger` | id, name, email | Owns exactly one account. |
 | `Account` | id, passenger id, balance in whole rupees | `hasSufficientCredit(amount)` and `deduct(amount)`. Never goes below zero. |
 | `FareTransaction` | id, reference, account id, journey id, amount, balance after, time | One row per debit. The only link between money and a journey. |
-| `QRTicket` | id, QR code, passenger id, route, boarding stop, planned destination, travel date, quoted fare, status | `validate(today)` and `markUsed()`. Status: ACTIVE, USED, EXPIRED, CANCELLED. |
+| `QRTicket` | id, QR code, passenger id, route, boarding stop, planned destination, travel date, quoted fare, status | `validate(today)` and `markUsed()`. Status is a state object (section 7): Active, Used, Expired, Cancelled. |
 | `Journey` | id, ticket id, route, boarding stop, exit stop, tap in, tap out, fare due, fare charged, status | Has the state machine below. |
 | `Stop`, `Route`, `RouteStop` | the network | `RouteStop` gives a stop's order on a route and its distance from the origin. Read-only here. |
 | `FareRule` | route, type (DISTANCE or FLAT), base fare, rate per km, flat amount, effective from, effective to | Pricing is data with dates, not a field on `Route`. |
@@ -109,3 +109,17 @@ The payoff: when a fare is wrong, I look in `fare`, never in the browser.
 4. **A debit is idempotent.** Its reference `FARE-<journeyId>` is unique, so a retried request cannot charge twice.
 5. **The server decides, the browser displays.** No fare or validity logic in React.
 6. **Rejections are answers.** The reader always gets a message it can show.
+
+## 7. Design patterns
+
+| Pattern | Where | Why it fits | Phase |
+|---|---|---|---|
+| **State** | `TicketState` with Active, Used, Expired, Cancelled; `JourneyState` with InProgress, PaymentPending, Completed | Behaviour depends on status and the status changes over time. Each rule lives in one class, and illegal moves fail loudly. | 3a |
+| **Strategy** | `FareStrategy` with `DistanceFareStrategy` and `FlatFareStrategy`, chosen by `FareCalculator` from the `FareRule` type | The fare algorithm is chosen from outside by data and never changes during a calculation. | 3b |
+| **Repository** | `repository` interfaces, `repository.memory` implementations | Services do not know how data is stored (decision 2). | 3c |
+| **Unit of Work** | `UnitOfWork`, `InMemoryDatabase` | The writes of one scan succeed together or not at all (rule D5). | 3c |
+| **Service layer, Facade** | `JourneyService` for the workflow, `ReaderService` as the single entry for the reader screen | One place per workflow. The web layer calls one object. | 3d |
+| **Static factory, value object** | `TicketValidation.ok()/invalid()` | A refused ticket is an answer, not an exception (decision 6). | 3a |
+| **Builder** | `ScanResult.Builder` | A scan result has many optional parts. | 3d |
+
+State and Strategy look the same in UML (an interface plus implementations) but differ in intent. In Strategy the caller picks the algorithm and it does not change. In State the object changes its own behaviour as events happen, and each state decides the next one.

@@ -10,7 +10,7 @@ import org.junit.Test;
 public class DatesTest {
 
     @Test
-    public void aMidnightScanBelongsToTheColomboDay() {               
+    public void aMidnightScanBelongsToTheColomboDay() {
         // Colombo is UTC+05:30, so 18:30:00 UTC is exactly midnight there.
         assertEquals(LocalDate.parse("2026-10-21"), Dates.localDate(Instant.parse("2026-10-21T18:29:59Z")));
         assertEquals(LocalDate.parse("2026-10-22"), Dates.localDate(Instant.parse("2026-10-21T18:30:00Z")));

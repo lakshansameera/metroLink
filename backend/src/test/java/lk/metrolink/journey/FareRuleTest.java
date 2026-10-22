@@ -85,5 +85,5 @@ public class FareRuleTest {
     public void aRuleMustHaveAStartDate() {
         assertThrows(NullPointerException.class, () -> FareRule.flat(3, "R200", 30, null, null));
     }
-    
+
 }

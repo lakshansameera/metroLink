@@ -23,4 +23,8 @@ public class TemporaryAccount extends Account {
     public boolean isUsableAt(Instant at) {
         return !Dates.localDate(at).isAfter(visaExpiry);
     }
+
+    public LocalDate getVisaExpiry() {
+        return visaExpiry;
+    }
 }

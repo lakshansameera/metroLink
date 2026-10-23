@@ -10,7 +10,7 @@ This repository holds two functions of the larger MetroLink system:
 Alerts, top-ups and ticket issuing belong to other functions and are only stood in for by demo data.
 
 - `backend`: Java 17, plain JDK HTTP server, Jackson, JUnit 4, Maven. No framework.
-- `frontend`: React and Vite. It only displays what the server decides. Two screens: Reader and New customer.
+- `frontend`: React and Vite. It only displays what the server decides. Two screens: sign-up and log-in first, then the Reader once a customer has logged in.
 - `docs/rules.md`: every business rule as one testable sentence.
 - `docs/design.md`: the model, the state machines, the API and the design patterns.
 
@@ -35,11 +35,21 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The dev server forwards `/api` to port 4000. Use the tabs under the title to switch between the Reader and the New customer screen.
+Open http://localhost:5173. The dev server forwards `/api` to port 4000. The first screen is sign-up and log-in. The Reader screen opens only after a customer logs in, and Log out brings the first screen back.
 
 ## Try it
 
 Demo passengers and tickets are created for today's date every time the server starts. "Start over with demo data" in the screen restores them at any time.
+
+The Reader shows only the logged-in customer's tickets, so log in as the owner of the ticket you want. Every demo customer's password is `Demo@1234`.
+
+| Ticket | Owner, log in as |
+|---|---|
+| `MLK-HAPPY01`, `MLK-OVERTR1`, `MLK-FLAT001`, `MLK-OLD0001`, `MLK-FUTURE1`, `MLK-CANCEL01` | Nimal Perera, `nimal@example.com` |
+| `MLK-PENDING` | Sanduni Silva, `sanduni@example.com` |
+| `MLK-NOFUNDS` | Kasun Fernando, `kasun@example.com` |
+| `MLK-TOURIST1` | Emma Walker, `emma@example.com` |
+| `MLK-VISAEXP1` | Hiro Tanaka, `hiro@example.com` |
 
 | Ticket | What to try | What you should see |
 |---|---|---|
@@ -56,19 +66,19 @@ Demo passengers and tickets are created for today's date every time the server s
 
 ## Try customer onboarding
 
-Open the **New customer** tab. Registrations are kept in memory, and "Start over with demo data" forgets them.
+Start on the first screen, which has the sign-up form and the log-in form. Registrations are kept in memory, and "Start over with demo data" forgets them.
 
 | What to do | What you should see |
 |---|---|
 | Press "Open my account" with an empty form | Every wrong field is marked at once: name, email, password and residency |
-| Choose Resident, fill in the rest, open the account | "Account opened": a **permanent** account with LKR 0, and the customer number, kind and balance on the card. The new customer is in the Passengers list on the Reader tab |
+| Choose Resident, fill in the rest, open the account | "Account opened": a **permanent** account with LKR 0, and the customer number, kind and balance on the card. The log-in form is filled in with the new email |
 | Choose Non-resident | A visa expiry date field appears. Leave it empty or pick a past date and you are told. A date of today or later gives a **temporary** account that works until that date |
 | Register the same email again, even in capitals or with spaces | "This email is already registered" |
-| Log in with the email and password you just used | The **Reader** tab opens with "Logged in as ..." and a Log out button. It shows only that customer's account, tickets and journeys, and every ticket shows its travel date. A new customer has no tickets yet |
+| Log in with the email and password you just used | The **Reader** screen opens, with "Logged in as ..." and a Log out button. It shows only that customer's account, tickets and journeys, and every ticket shows its travel date. A new customer has no tickets yet |
 | Log in with a wrong password, or with an email nobody has | The same message for both: "That email and password do not match an account." |
-| Log in as `nimal@example.com` with `Demo@1234` | Works, and the Reader tab shows his six tickets. All five demo customers use the password `Demo@1234`. Log in as `sanduni@example.com` and you see her one ticket instead |
-| Press Log out | Back to the New customer screen. The Reader tab shows everyone again, as it did before anyone logged in |
-| On the Reader tab, add credit to the new customer in the Passengers list | The balance goes up, but there are no tickets: issuing tickets is another function |
+| Log in as `nimal@example.com` with `Demo@1234` | Works, and the Reader shows his six tickets. All five demo customers use the password `Demo@1234`. Log in as `sanduni@example.com` and you see her one ticket instead |
+| Press Log out | Back to the first screen with empty forms. The Reader is not reachable again until someone logs in |
+| Log in as the new customer, and press Add 50 under "Your account" | The balance goes up, but there are no tickets: issuing tickets is another function |
 
 The rules are O1 to O9 in `docs/rules.md`. Section 8 of `docs/design.md` shows how each message in the sequence diagram maps to code.
 

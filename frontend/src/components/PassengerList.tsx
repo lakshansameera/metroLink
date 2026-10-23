@@ -5,14 +5,13 @@ interface Props {
   passengers: Passenger[];
   onTopUp: (passengerId: number, amount: number) => void;
   busy: boolean;
-  /** "Passengers" for the whole network, "Your account" for one logged-in customer. */
-  title?: string;
 }
 
-export function PassengerList({ passengers, onTopUp, busy, title = 'Passengers' }: Props) {
+/** The logged-in customer's own account: the kind, the balance, and the test buttons that add credit. */
+export function PassengerList({ passengers, onTopUp, busy }: Props) {
   return (
     <section className="panel" aria-labelledby="people-title">
-      <h2 id="people-title">{title}</h2>
+      <h2 id="people-title">Your account</h2>
       <ul className="people">
         {passengers.map((p) => (
           <li key={p.passengerId}>

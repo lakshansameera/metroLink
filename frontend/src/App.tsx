@@ -16,15 +16,14 @@ const heading: Record<View, { title: string; line: string }> = {
 };
 
 export function App() {
-  const [view, setView] = useState<View>('reader');
   /** Changes on every reset, so the sign-up screen starts empty again. */
   const [startOver, setStartOver] = useState(0);
   const [reference, setReference] = useState<Reference | null>(null);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [journeys, setJourneys] = useState<Journey[]>([]);
-  /** Who logged in, or null. The server keeps no session, so this only decides what the Reader screen shows. */
-  const [customerId, setCustomerId] = useState<number | null>(null);
+  /** Who logged in, or null. The server keeps no session, so this only decides which screen shows and whose things. */
+  const [loggedIn, setLoggedIn] = useState<Passenger | null>(null);
 
   const [token, setToken] = useState('');
   const [stopId, setStopId] = useState('S1');
@@ -59,21 +58,13 @@ export function App() {
     };
   }, []);
 
-  // A logged-in customer sees only their own account, tickets and journeys. With nobody logged in, the Reader shows
-  // everyone, as a station demo.
-  const customer = passengers.find((p) => p.passengerId === customerId);
-  const shownPassengers = useMemo(
-    () => (customerId === null ? passengers : passengers.filter((p) => p.passengerId === customerId)),
-    [passengers, customerId],
-  );
-  const shownTickets = useMemo(
-    () => (customerId === null ? tickets : tickets.filter((t) => t.passengerId === customerId)),
-    [tickets, customerId],
-  );
-  const shownJourneys = useMemo(
-    () => (customerId === null ? journeys : journeys.filter((j) => j.passengerId === customerId)),
-    [journeys, customerId],
-  );
+  // Nobody sees the Reader until they log in. Then it shows only that customer's account, tickets and journeys.
+  const view: View = loggedIn ? 'reader' : 'onboarding';
+  const customerId = loggedIn?.passengerId ?? null;
+  const customer = passengers.find((p) => p.passengerId === customerId) ?? loggedIn;
+  const shownPassengers = useMemo(() => passengers.filter((p) => p.passengerId === customerId), [passengers, customerId]);
+  const shownTickets = useMemo(() => tickets.filter((t) => t.passengerId === customerId), [tickets, customerId]);
+  const shownJourneys = useMemo(() => journeys.filter((j) => j.passengerId === customerId), [journeys, customerId]);
 
   const ticket = useMemo(() => shownTickets.find((t) => t.qrCode === token), [shownTickets, token]);
   const journey = useMemo(() => shownJourneys.find((j) => j.ticketId === ticket?.ticketId), [shownJourneys, ticket]);
@@ -119,18 +110,17 @@ export function App() {
   }
 
   /** The Reader screen opens, showing only this customer's things. */
-  function logIn(loggedIn: Passenger) {
+  function logIn(customerWhoLoggedIn: Passenger) {
     clearReader();
-    setCustomerId(loggedIn.passengerId);
-    setView('reader');
+    setLoggedIn(customerWhoLoggedIn);
     void run(async () => {}); // reload, so the balance and tickets are current
   }
 
+  /** Back to the first screen, with empty forms. */
   function logOut() {
     clearReader();
-    setCustomerId(null);
+    setLoggedIn(null);
     setStartOver((n) => n + 1);
-    setView('onboarding');
   }
 
   const reset = () =>
@@ -138,7 +128,7 @@ export function App() {
       await api.reset();
       setStartOver((n) => n + 1);
       // Customers who registered are gone after a reset, so nobody stays logged in.
-      setCustomerId(null);
+      setLoggedIn(null);
       clearReader();
     });
 
@@ -150,21 +140,9 @@ export function App() {
         <button type="button" className="quiet" disabled={busy} onClick={reset}>
           Start over with demo data
         </button>
-        <nav className="views" aria-label="Screens">
-          <button type="button" aria-current={view === 'reader' ? 'page' : undefined} onClick={() => setView('reader')}>
-            Reader
-          </button>
-          <button
-            type="button"
-            aria-current={view === 'onboarding' ? 'page' : undefined}
-            onClick={() => setView('onboarding')}
-          >
-            New customer
-          </button>
-        </nav>
       </header>
 
-      {customer && view === 'reader' && (
+      {customer && (
         <div className="whoami-wrap">
           <section className="whoami" aria-label="Logged in customer">
             <p>
@@ -184,10 +162,10 @@ export function App() {
         </p>
       )}
 
-      {!reference ? (
-        <p className="loading">{error ? '' : 'Loading the network.'}</p>
-      ) : view === 'onboarding' ? (
+      {view === 'onboarding' ? (
         <Onboarding key={startOver} onChanged={refresh} onLoggedIn={logIn} />
+      ) : !reference ? (
+        <p className="loading">{error ? '' : 'Loading the network.'}</p>
       ) : (
         <main className="shell">
           <div className="area-tickets">
@@ -212,12 +190,7 @@ export function App() {
           </div>
 
           <div className="area-people">
-            <PassengerList
-              passengers={shownPassengers}
-              onTopUp={topUp}
-              busy={busy}
-              title={customer ? 'Your account' : 'Passengers'}
-            />
+            <PassengerList passengers={shownPassengers} onTopUp={topUp} busy={busy} />
           </div>
           <div className="area-journeys">
             <JourneyList journeys={shownJourneys} onSettle={settle} busy={busy} />

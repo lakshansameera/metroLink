@@ -112,7 +112,7 @@ public class Journey {
         return new Journey(newJourneyId, ticketId, routeNo, boardingStopId, tapInTime, exitStopId, tapOutTime,
                 fareDue, fareCharged, state);
     }
-    
+
     public Journey copy() {
         return withId(journeyId);
     }

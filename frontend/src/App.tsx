@@ -206,7 +206,7 @@ export function App() {
             <PassengerList passengers={shownPassengers} onTopUp={topUp} busy={busy} />
           </div>
           <div className="area-journeys">
-            <JourneyList journeys={shownJourneys} onSettle={settle} busy={busy} />
+            <JourneyList journeys={shownJourneys} tickets={shownTickets} onSettle={settle} busy={busy} />
           </div>
         </main>
       )}

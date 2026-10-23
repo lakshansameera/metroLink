@@ -1,5 +1,6 @@
 import { lkr, outcomeLabel } from '../format';
 import type { ReaderDisplay } from '../types';
+import { StateBadge } from './StateBadge';
 
 interface Props {
   result: ReaderDisplay | null;
@@ -46,6 +47,10 @@ export function ReaderGlass({ result, busy }: Props) {
         <p className="glass-ticket">
           <span>{result.ticket.qrCode}</span>
           <span>{result.ticket.passengerName}</span>
+          <span className="glass-states">
+            <StateBadge kind="Ticket" state={result.ticket.status} />
+            {result.journey && <StateBadge kind="Journey" state={result.journey.status} />}
+          </span>
         </p>
       )}
     </section>

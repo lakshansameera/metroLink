@@ -266,6 +266,14 @@ button:disabled {
   text-align: right;
 }
 
+.ticket-states {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
 .ticket-who {
   grid-column: 1 / -1;
 }
@@ -553,8 +561,11 @@ button:disabled {
   gap: 1rem;
 }
 
-.journey-status {
-  font-weight: 600;
+.journey-states {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
 .journey-trip {
@@ -813,3 +824,56 @@ button:disabled {
   color: var(--ink-soft);
   font-size: 0.9375rem;
 }
+
+/* ---------- states: a ticket's or a journey's state, spelled as the server spells it ---------- */
+
+.state {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.state-kind {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.state-name {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.state-active,
+.state-in_progress { background: var(--line-tint); border-color: var(--line); }
+.state-used { background: transparent; }
+.state-expired,
+.state-cancelled { border-color: var(--stop); }
+.state-expired .state-name,
+.state-cancelled .state-name { color: var(--bad-ink); }
+.state-payment_pending { background: var(--wait); border-color: var(--wait); color: var(--wait-ink); }
+.state-payment_pending .state-kind { color: var(--wait-ink); }
+.state-completed { background: var(--go); border-color: var(--go); color: #fff; }
+.state-completed .state-kind { color: #fff; opacity: 0.85; }
+
+/* On the reader face the colour already says how it went, so the states are plain chips on the panel colour. */
+.glass-states {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.glass .state {
+  background: var(--panel);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.glass .state .state-kind { color: var(--ink-soft); opacity: 1; }
+.glass .state .state-name { color: var(--ink); }

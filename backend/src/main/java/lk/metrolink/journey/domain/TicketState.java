@@ -1,6 +1,7 @@
 package lk.metrolink.journey.domain;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import lk.metrolink.journey.log.Log;
 
@@ -14,6 +15,11 @@ public interface TicketState {
                 qrCode, name(), getClass().getSimpleName());
         throw new DomainException("Ticket " + qrCode + " is " + name() + ", cannot mark USED",
                 "ILLEGAL_TRANSITION", 409);
+    }
+
+    /** Every state a ticket can be in, spelled as it is stored and sent to the screen. */
+    static List<String> names() {
+        return List.of("ACTIVE", "USED", "EXPIRED", "CANCELLED");
     }
 
     static TicketState of(String name) {

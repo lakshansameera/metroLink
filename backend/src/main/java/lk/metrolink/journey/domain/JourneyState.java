@@ -1,5 +1,6 @@
 package lk.metrolink.journey.domain;
 
+import java.util.List;
 import lk.metrolink.journey.log.Log;
 
 public interface JourneyState {
@@ -36,6 +37,11 @@ public interface JourneyState {
 
     default JourneyState complete(long journeyId) {
         throw illegal(journeyId, "complete");
+    }
+
+    /** Every state a journey can be in, spelled as it is stored and sent to the screen. */
+    static List<String> names() {
+        return List.of("IN_PROGRESS", "PAYMENT_PENDING", "COMPLETED");
     }
 
     static JourneyState of(String name) {

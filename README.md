@@ -133,6 +133,21 @@ METROLINK_DB=memory java -jar target/metrolink-journey-execution.jar            
 
 The tests run every store-dependent test twice, once on the in-memory store and once on H2, so both behave the same way.
 
+## States on the screen
+
+Each ticket and each journey shows its state exactly as the server names it, in a chip such as `Ticket ACTIVE` or `Journey PAYMENT_PENDING`. They also read the same as the console log (`Journey #1: IN_PROGRESS -> COMPLETED`). Hover a chip for what it means. Tickets show both chips, journeys show both, and the reader face shows the ones its answer carries.
+
+| Step | Ticket | Journey |
+|---|---|---|
+| Booked, not tapped | `ACTIVE` | none yet |
+| Tapped in | `ACTIVE` | `IN_PROGRESS` |
+| Tapped out, fare paid | `USED` | `COMPLETED` |
+| Tapped out, account cannot pay | `ACTIVE` | `PAYMENT_PENDING` |
+| Fare paid later ("Pay fare now") | `USED` | `COMPLETED` |
+| A tap refused (used, wrong day, cancelled, too little credit) | unchanged | unchanged |
+
+A ticket for another day stays `ACTIVE` (nothing expires it by itself), and the note under it says the reader refuses it for its date. The rules are V1 to V4 in `docs/rules.md`. A backend test (`FrontEndStatesTest`) reads `frontend/src/types.ts` and fails if its list of states and the server's ever differ.
+
 ## Console logs
 
 The server writes what it is doing to the console, so you can watch the states change and see which class does what. It uses no logging library. Start it and tap a ticket in the Reader, and the console shows this (a real run, shortened):

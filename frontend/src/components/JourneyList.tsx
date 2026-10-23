@@ -1,13 +1,16 @@
-import { journeyLabel, lkr, timeOf } from '../format';
-import type { Journey } from '../types';
+import { lkr, timeOf } from '../format';
+import type { Journey, Ticket } from '../types';
+import { StateBadge } from './StateBadge';
 
 interface Props {
   journeys: Journey[];
+  tickets: Ticket[];
   onSettle: (journeyId: number) => void;
   busy: boolean;
 }
 
-export function JourneyList({ journeys, onSettle, busy }: Props) {
+export function JourneyList({ journeys, tickets, onSettle, busy }: Props) {
+  const ticketOf = new Map(tickets.map((t) => [t.ticketId, t]));
   return (
     <section className="panel" aria-labelledby="journeys-title">
       <h2 id="journeys-title">Journeys</h2>
@@ -19,7 +22,10 @@ export function JourneyList({ journeys, onSettle, busy }: Props) {
             <li key={j.journeyId} className={`journey journey-${j.status.toLowerCase()}`}>
               <div className="journey-head">
                 <strong>{j.passengerName}</strong>
-                <span className="journey-status">{journeyLabel[j.status]}</span>
+                <span className="journey-states">
+                  <StateBadge kind="Journey" state={j.status} />
+                  {ticketOf.get(j.ticketId) && <StateBadge kind="Ticket" state={ticketOf.get(j.ticketId)!.status} />}
+                </span>
               </div>
               <p className="journey-trip">
                 {j.boardingStopName} to {j.exitStopName ?? 'not exited yet'}

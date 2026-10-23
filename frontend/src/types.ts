@@ -3,8 +3,13 @@
 export type Direction = 'IN' | 'OUT';
 export type Tone = 'SUCCESS' | 'WARNING' | 'ERROR';
 export type Outcome = 'JOURNEY_STARTED' | 'JOURNEY_COMPLETED' | 'PAYMENT_PENDING' | 'ALREADY_SETTLED' | 'REJECTED';
-export type JourneyStatus = 'IN_PROGRESS' | 'PAYMENT_PENDING' | 'COMPLETED';
-export type TicketStatus = 'ACTIVE' | 'USED' | 'EXPIRED' | 'CANCELLED';
+
+// The states, spelled exactly as the server spells them: TicketState and JourneyState in lk.metrolink.journey.domain.
+// FrontEndStatesTest in the backend fails if these two lists and the server's states ever differ.
+export const TICKET_STATUSES = ['ACTIVE', 'USED', 'EXPIRED', 'CANCELLED'] as const;
+export const JOURNEY_STATUSES = ['IN_PROGRESS', 'PAYMENT_PENDING', 'COMPLETED'] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
+export type JourneyStatus = (typeof JOURNEY_STATUSES)[number];
 
 export interface RouteStop {
   stopId: string;

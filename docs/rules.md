@@ -97,6 +97,17 @@ The server writes what it is doing to the console (section 11 of `docs/design.md
 | L8 | Logging never changes what the program does: the same requests give the same answers with the log off and at `debug`; an exception goes through the logging unchanged; a message that cannot be formatted becomes a note and never fails the request; a failure inside the program is a warning and still answers HTTP 500. | `ConsoleTraceTest`, `LoggedUnitOfWorkTest`, `RepositoryTraceTest`, `LogTest`, `WebLogTest` |
 | L9 | At `debug`, every repository call shows its arguments and what it returned. Below `debug`, none does. | `RepositoryTraceTest`, `ConsoleTraceTest` |
 
+## States on the screen
+
+The screen shows a ticket's state and a journey's state on each ticket, on each journey and on the reader face. "Proven in" names the test class. The look of the screen was also checked in a browser against the live server: 52 comparisons of what a card, a journey row or the reader face said with what the server reported, in each step below, with no difference.
+
+| ID | Rule | Proven in |
+| --- | --- | --- |
+| V1 | The screen writes a state exactly as the server names it: `ACTIVE`, `USED`, `EXPIRED`, `CANCELLED` for a ticket and `IN_PROGRESS`, `PAYMENT_PENDING`, `COMPLETED` for a journey. It has no word of its own in their place. Its list of states (`frontend/src/types.ts`) is the server's list, and every state the server sends is in it. | `FrontEndStatesTest` |
+| V2 | The database accepts exactly those states, so no row can hold a state the screen does not know. The test reads the two `CHECK` lists in `schema.sql`. | `FrontEndStatesTest` |
+| V3 | A ticket and its journey show the pair the server moves them through. Tap in: `ACTIVE` and `IN_PROGRESS`. Tap out with the fare paid: `USED` and `COMPLETED`, together. Tap out with the fare unpaid: `ACTIVE` and `PAYMENT_PENDING`, until it is paid, and then `USED` and `COMPLETED`. A ticket is `USED` only when its journey is `COMPLETED`. | `FrontEndStatesTest`, `ExitTest`, `SettlementTest` |
+| V4 | A refused tap changes no state. A ticket for another day stays `ACTIVE` (nothing expires it by itself) and the screen says the reader refuses it for its date. The answer to a refused tap carries the ticket only, so the reader face shows only the ticket's state then, as the console log does. | `FrontEndStatesTest` |
+
 ## Worked numbers (for the first tests)
 
 Route R100 charges 20 + 4.5 per km from 1 July 2026, and 20 + 4.0 per km before that. Route R200 is a flat LKR 30.

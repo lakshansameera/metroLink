@@ -1,0 +1,87 @@
+package lk.metrolink.journey.service;
+
+import lk.metrolink.journey.domain.Journey;
+import lk.metrolink.journey.domain.QRTicket;
+
+/**
+ * The structured answer to a scan or a settlement. The Reader turns it into a tone and a sentence.
+ * Build one with {@code ScanResult.of(outcome)...build()}, so nobody has to remember the order of ten arguments.
+ */
+public final class ScanResult {
+    private final ScanOutcome outcome;
+    private final RejectionReason reason;
+    private final String detail;
+    private final Journey journey;
+    private final QRTicket ticket;
+    private final Long fareDue;
+    private final Long fareCharged;
+    private final Long balance;
+    private final Long shortfall;
+    private final Long required;
+    private final boolean overtravelled;
+
+    private ScanResult(Builder b) {
+        this.outcome = b.outcome;
+        this.reason = b.reason;
+        this.detail = b.detail;
+        this.journey = b.journey;
+        this.ticket = b.ticket;
+        this.fareDue = b.fareDue;
+        this.fareCharged = b.fareCharged;
+        this.balance = b.balance;
+        this.shortfall = b.shortfall;
+        this.required = b.required;
+        this.overtravelled = b.overtravelled;
+    }
+
+    public static Builder of(ScanOutcome outcome) {
+        return new Builder(outcome);
+    }
+
+    public ScanOutcome getOutcome() { return outcome; }
+    /** Why the scan was refused, or why a fare is waiting. Null when there is nothing to explain. */
+    public RejectionReason getReason() { return reason; }
+    public String getDetail() { return detail; }
+    public Journey getJourney() { return journey; }
+    public QRTicket getTicket() { return ticket; }
+    public Long getFareDue() { return fareDue; }
+    public Long getFareCharged() { return fareCharged; }
+    public Long getBalance() { return balance; }
+    public Long getShortfall() { return shortfall; }
+    public Long getRequired() { return required; }
+    /** True when the passenger got off after the planned stop (rule X7). A flag, not a failure. */
+    public boolean isOvertravelled() { return overtravelled; }
+
+    public static final class Builder {
+        private final ScanOutcome outcome;
+        private RejectionReason reason;
+        private String detail;
+        private Journey journey;
+        private QRTicket ticket;
+        private Long fareDue;
+        private Long fareCharged;
+        private Long balance;
+        private Long shortfall;
+        private Long required;
+        private boolean overtravelled;
+
+        private Builder(ScanOutcome outcome) {
+            this.outcome = outcome;
+        }
+
+        public Builder reason(RejectionReason v) { this.reason = v; return this; }
+        public Builder detail(String v) { this.detail = v; return this; }
+        public Builder journey(Journey v) { this.journey = v; return this; }
+        public Builder ticket(QRTicket v) { this.ticket = v; return this; }
+        public Builder fareDue(Long v) { this.fareDue = v; return this; }
+        public Builder fareCharged(Long v) { this.fareCharged = v; return this; }
+        public Builder balance(Long v) { this.balance = v; return this; }
+        public Builder shortfall(Long v) { this.shortfall = v; return this; }
+        public Builder required(Long v) { this.required = v; return this; }
+        public Builder overtravelled(boolean v) { this.overtravelled = v; return this; }
+
+        public ScanResult build() {
+            return new ScanResult(this);
+        }
+    }
+}

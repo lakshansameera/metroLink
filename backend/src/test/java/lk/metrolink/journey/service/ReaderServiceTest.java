@@ -9,6 +9,7 @@ import static org.junit.Assert.fail;
 
 import java.util.List;
 import lk.metrolink.journey.domain.NotFoundException;
+import lk.metrolink.journey.repository.OnEveryStore;
 import lk.metrolink.journey.service.ReaderDisplay.Tone;
 import lk.metrolink.journey.service.view.JourneyView;
 import lk.metrolink.journey.service.view.PassengerView;
@@ -16,7 +17,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 /** The reader turns results into a tone and a sentence; the query service names things for the screens. */
-public class ReaderServiceTest {
+public class ReaderServiceTest extends OnEveryStore {
 
     private Fixture f;
     private ReaderService reader;
@@ -25,10 +26,10 @@ public class ReaderServiceTest {
 
     @Before
     public void setUp() {
-        f = new Fixture();
+        f = new Fixture(open(Fixture.TODAY));
         queries = new QueryService(f.db, f.passengers, f.accounts, f.tickets, f.journeys, f.transactions, f.routes);
         reader = new ReaderService(f.db, f.journeyService, f.routes, queries);
-        testData = new TestDataService(f.db, f.accountService, f.accounts, queries, () -> f.db.reset(Fixture.TODAY));
+        testData = new TestDataService(f.db, f.accountService, f.accounts, queries, () -> f.store.reset(Fixture.TODAY));
     }
 
     private ReaderDisplay tap(String qr, ScanDirection direction, String stop) {
@@ -72,7 +73,75 @@ public class ReaderServiceTest {
         assertEquals(Tone.SUCCESS, shown.getTone());
         assertTrue(shown.isOvertravelled());
         assertTrue(shown.getJourney().isOvertravelled());
-        assertTrue(shown.getMessage().endsWith("You travelled past your planned stop."));
+        assertTrue(shown.getMessage(), shown.getMessage().endsWith(
+                " Over-travel: your ticket was Colombo Fort to Peliyagoda, you travelled Colombo Fort to Kiribathgoda."
+                        + " Over-charged: LKR 15 more than the ticket fare of LKR 54."));
+    }
+
+    @Test
+    public void boardingAtAnotherStopThanTheTicketIsLetThroughWithAWarning() {                     // X9
+        ReaderDisplay shown = tap("MLK-HAPPY01", ScanDirection.IN, "S2");                         // the ticket says S1
+
+        assertEquals(ScanOutcome.JOURNEY_STARTED, shown.getOutcome());
+        assertEquals(Tone.WARNING, shown.getTone());
+        assertTrue(shown.getMessage(), shown.getMessage().startsWith(
+                "Journey started at Maradana, not Colombo Fort as on your ticket."));
+        assertEquals("IN_PROGRESS", shown.getJourney().getStatus());
+        assertTrue(shown.getJourney().getTrip().isBoardedOffTicket());
+        assertNull("nothing is decided until the exit", shown.getJourney().getTrip().getKind());
+        assertNull(shown.getJourney().getTrip().getFareDifference());
+    }
+
+    @Test
+    public void boardingAtTheTicketsOwnStopStaysAPlainSuccess() {
+        ReaderDisplay shown = tap("MLK-HAPPY01", ScanDirection.IN, "S1");
+
+        assertEquals(Tone.SUCCESS, shown.getTone());
+        assertFalse(shown.getJourney().getTrip().isBoardedOffTicket());
+    }
+
+    @Test
+    public void gettingOffEarlierIsAShorterTripAndSaysHowMuchLess() {                              // X10
+        tap("MLK-HAPPY01", ScanDirection.IN, "S1");
+
+        ReaderDisplay shown = tap("MLK-HAPPY01", ScanDirection.OUT, "S4");
+
+        assertEquals(Tone.SUCCESS, shown.getTone());
+        assertFalse(shown.isOvertravelled());
+        assertEquals("SHORTER", shown.getJourney().getTrip().getKind());
+        assertFalse(shown.getJourney().getTrip().isOvercharged());
+        assertEquals(Long.valueOf(54 - 69), shown.getJourney().getTrip().getFareDifference());
+        assertEquals("Fare LKR 54 charged. Balance LKR 446. Shorter trip: your ticket was Colombo Fort to Kiribathgoda,"
+                + " you travelled Colombo Fort to Peliyagoda. LKR 15 less than the ticket fare of LKR 69.",
+                shown.getMessage());
+    }
+
+    @Test
+    public void boardingElsewhereAndGettingOffElsewhereIsOverTravelWithTheFareAgainstTheTicket() {  // X7, X9, X10
+        tap("MLK-HAPPY01", ScanDirection.IN, "S2");                                                // ticket: S1 to S5
+
+        ReaderDisplay shown = tap("MLK-HAPPY01", ScanDirection.OUT, "S6");
+
+        assertEquals(Tone.SUCCESS, shown.getTone());
+        assertTrue(shown.isOvertravelled());
+        assertEquals("OVER_TRAVEL", shown.getJourney().getTrip().getKind());
+        assertTrue(shown.getJourney().getTrip().isBoardedOffTicket());
+        assertTrue(shown.getJourney().getTrip().isExitedOffTicket());
+        assertEquals(69, shown.getJourney().getTrip().getQuotedFare());
+        assertTrue(shown.getMessage(), shown.getMessage().contains(
+                " Over-travel: your ticket was Colombo Fort to Kiribathgoda, you travelled Maradana to Kadawatha."));
+    }
+
+    @Test
+    public void scanningOutAgainOnAnUnpaidJourneyStillSaysItWasOverTravel() {
+        tap("MLK-PENDING", ScanDirection.IN, "S1");                                                // ticket: S1 to S3
+        tap("MLK-PENDING", ScanDirection.OUT, "S5");
+
+        ReaderDisplay again = tap("MLK-PENDING", ScanDirection.OUT, "S5");
+
+        assertEquals(ScanOutcome.PAYMENT_PENDING, again.getOutcome());
+        assertTrue(again.isOvertravelled());
+        assertTrue(again.getMessage(), again.getMessage().contains("Over-travel: your ticket was Colombo Fort to Dematagoda"));
     }
 
     @Test
@@ -82,7 +151,9 @@ public class ReaderServiceTest {
         ReaderDisplay shown = tap("MLK-PENDING", ScanDirection.OUT, "S5");
 
         assertEquals(Tone.WARNING, shown.getTone());
-        assertEquals("Fare LKR 69 is owed. Top up at least LKR 24 to complete this journey.", shown.getMessage());
+        assertEquals("Fare LKR 69 is owed. Top up at least LKR 24 to complete this journey."
+                + " Over-travel: your ticket was Colombo Fort to Dematagoda, you travelled Colombo Fort to Kiribathgoda."
+                + " Over-charged: LKR 29 more than the ticket fare of LKR 40.", shown.getMessage());
         assertEquals(Long.valueOf(24), shown.getFare().getShortfall());
         assertNull(shown.getFare().getCharged());
     }
@@ -157,7 +228,10 @@ public class ReaderServiceTest {
 
         assertEquals(145, topped.getBalance());
         assertEquals(ScanOutcome.JOURNEY_COMPLETED, shown.getOutcome());
-        assertEquals("Fare LKR 69 charged. Balance LKR 76.", shown.getMessage());
+        assertEquals("Fare LKR 69 charged. Balance LKR 76."
+                + " Over-travel: your ticket was Colombo Fort to Dematagoda, you travelled Colombo Fort to Kiribathgoda."
+                + " Over-charged: LKR 29 more than the ticket fare of LKR 40.", shown.getMessage());
+        assertTrue("settling later still knows it was over-travel", shown.isOvertravelled());
     }
 
     @Test

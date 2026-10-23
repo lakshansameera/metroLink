@@ -9,6 +9,7 @@ import lk.metrolink.journey.domain.DomainException;
 import lk.metrolink.journey.domain.FareRule;
 import lk.metrolink.journey.domain.FareType;
 import lk.metrolink.journey.domain.Route;
+import lk.metrolink.journey.log.Log;
 
 public class FareCalculator {
 
@@ -40,8 +41,11 @@ public class FareCalculator {
             throw new DomainException("No fare strategy registered for " + rule.getFareType(),
                     "NO_STRATEGY", 500);
         }
-        return new FareQuote(strategy.calculate(rule, distanceKm), distanceKm, rule.getFareRuleId(),
-                rule.getFareType());
+        Log.info(Log.STRATEGY, "FareCalculator: route %s %s to %s is %s km; fare rule #%d in force on %s is %s -> %s",
+                route.getRouteNo(), boardingStopId, exitStopId, distanceKm, rule.getFareRuleId(), onDate,
+                rule.getFareType(), strategy.getClass().getSimpleName());
+        long amount = strategy.calculate(rule, distanceKm);
+        return new FareQuote(amount, distanceKm, rule.getFareRuleId(), rule.getFareType());
     }
 
     /** If two rules overlap on a date, the one that started later wins. */

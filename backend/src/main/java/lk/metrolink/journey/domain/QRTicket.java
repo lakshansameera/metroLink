@@ -3,6 +3,7 @@ package lk.metrolink.journey.domain;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
+import lk.metrolink.journey.log.Log;
 
 public class QRTicket {
 
@@ -28,6 +29,17 @@ public class QRTicket {
         this.quotedFare = quotedFare;
         this.issuedAt = issuedAt;
         this.state = state;
+    }
+
+    /** A newly booked ticket: active, not yet stored (id 0), with no journey. */
+    public static QRTicket issue(String qrCode, long passengerId, String routeNo, String boardingStopId,
+                                 String plannedDestinationStopId, LocalDate travelDate, long quotedFare,
+                                 Instant issuedAt) {
+        Log.info(Log.FACTORY, "QRTicket.issue: new ticket %s for passenger #%d, route %s %s to %s on %s, fare LKR %d,"
+                + " starts in the ACTIVE state", qrCode, passengerId, routeNo, boardingStopId,
+                plannedDestinationStopId, travelDate, quotedFare);
+        return new QRTicket(0, qrCode, passengerId, routeNo, boardingStopId, plannedDestinationStopId, travelDate,
+                quotedFare, issuedAt, TicketState.of("ACTIVE"));
     }
 
     public long getTicketId() {
@@ -75,11 +87,18 @@ public class QRTicket {
     }
 
     public Optional<InvalidTicketReason> refusalReason(LocalDate today) {
-        return state.refusalReason(travelDate, today);
+        Optional<InvalidTicketReason> reason = state.refusalReason(travelDate, today);
+        Log.info(Log.STATE, "Ticket #%d %s is %s: %s.refusalReason(travel date %s, today %s) -> %s",
+                ticketId, qrCode, state.name(), state.getClass().getSimpleName(), travelDate, today,
+                reason.isPresent() ? reason.get().name() : "usable");
+        return reason;
     }
 
     public void markUsed() {
-        state = state.markUsed(qrCode);
+        TicketState before = state;
+        state = before.markUsed(qrCode);
+        Log.info(Log.STATE, "Ticket #%d %s: %s -> %s (%s.markUsed)", ticketId, qrCode, before.name(), state.name(),
+                before.getClass().getSimpleName());
     }
 
     public QRTicket withId(long newTicketId) {

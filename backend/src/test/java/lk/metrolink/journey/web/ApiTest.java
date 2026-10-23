@@ -17,12 +17,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import lk.metrolink.journey.Container;
 import lk.metrolink.journey.domain.Dates;
+import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-/** The API over real HTTP on a free port: the same requests the React screen makes. */
-public class ApiTest {
+/** The API over real HTTP on a free port: the same requests the React screen makes, on every store. */
+public class ApiTest extends OnEveryStore {
 
     private static final LocalDate TODAY = LocalDate.parse("2026-10-21");
     private static final String MORNING = "2026-10-21T09:30:00+05:30";
@@ -33,7 +34,7 @@ public class ApiTest {
 
     @Before
     public void setUp() throws Exception {
-        server = ApiServer.start(Container.create(TODAY), 0);
+        server = ApiServer.start(Container.create(open(TODAY), TODAY), 0);
         client = HttpClient.newHttpClient();
     }
 
@@ -113,11 +114,37 @@ public class ApiTest {
         assertEquals("COMPLETED", exited.json.get("journey").get("status").asText());
         assertEquals("2026-10-21T04:00:00Z", exited.json.get("journey").get("tapInTime").asText());
         assertFalse(exited.json.get("overtravelled").asBoolean());
+        assertEquals("AS_TICKETED", exited.json.get("journey").get("trip").get("kind").asText());
+        assertEquals(69, exited.json.get("journey").get("trip").get("quotedFare").asInt());
+        assertEquals(0, exited.json.get("journey").get("trip").get("fareDifference").asInt());
+        assertFalse(exited.json.get("journey").get("trip").get("overcharged").asBoolean());
 
         Reply statement = get("/api/passengers/1/account");
         assertEquals(200, statement.status);
         assertEquals(431, statement.json.get("passenger").get("balance").asInt());
         assertEquals("FARE-1", statement.json.get("charges").get(0).get("reference").asText());
+    }
+
+    @Test
+    public void aTripOffTheTicketIsOverTravelAndOverChargedOverHttp() throws Exception {
+        Reply boarded = scan("MLK-HAPPY01", "IN", "S2", MORNING);                              // the ticket says S1 to S5
+        assertEquals("JOURNEY_STARTED", boarded.json.get("outcome").asText());
+        assertEquals("WARNING", boarded.json.get("tone").asText());
+        assertTrue(boarded.json.get("journey").get("trip").get("boardedOffTicket").asBoolean());
+        assertTrue("not decided before the exit", boarded.json.get("journey").get("trip").get("kind").isNull());
+
+        Reply exited = scan("MLK-HAPPY01", "OUT", "S6", LATER);
+        JsonNode trip = exited.json.get("journey").get("trip");
+        assertEquals("JOURNEY_COMPLETED", exited.json.get("outcome").asText());
+        assertTrue(exited.json.get("overtravelled").asBoolean());
+        assertTrue(exited.json.get("journey").get("overtravelled").asBoolean());
+        assertEquals("OVER_TRAVEL", trip.get("kind").asText());
+        assertTrue(trip.get("boardedOffTicket").asBoolean());
+        assertTrue(trip.get("exitedOffTicket").asBoolean());
+        assertEquals(69, trip.get("quotedFare").asInt());
+        assertEquals(7, trip.get("fareDifference").asInt());
+        assertTrue(trip.get("overcharged").asBoolean());
+        assertEquals(76, exited.json.get("fare").get("charged").asInt());
     }
 
     @Test
@@ -275,6 +302,18 @@ public class ApiTest {
 
         assertEquals(204, response.statusCode());
         assertEquals("*", response.headers().firstValue("Access-Control-Allow-Origin").orElse(""));
+    }
+
+    @Test
+    public void thePermissionCheckAsksTheCallerToUseANewConnectionForItsNextRequest() throws Exception {
+        // The JDK server sometimes dropped a connection that was reused at once after a 204 answer, so the caller
+        // that sent this one is asked not to reuse it. Without this, two checks in a row failed now and then.
+        HttpRequest preflight = HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + "/api/reader/scan"))
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody()).build();
+
+        HttpResponse<String> response = client.send(preflight, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals("close", response.headers().firstValue("Connection").orElse(""));
     }
 
     // ---- customer onboarding: register and log in (O1 to O9)
@@ -504,5 +543,211 @@ public class ApiTest {
         assertEquals(5, get("/api/passengers").json.size());
         assertEquals(401, login("amaya@example.com", PASSWORD).status);
         assertEquals(6, register("amaya@example.com").json.get("userId").asInt());
+    }
+
+    // ---- booking a ticket (T1 to T12)
+
+    private static String booking(Object passengerId, String route, String from, String to, String date) {
+        StringBuilder body = new StringBuilder("{");
+        if (passengerId != null) {
+            body.append("\"passengerId\":").append(passengerId).append(",");
+        }
+        if (route != null) {
+            body.append("\"routeNo\":\"").append(route).append("\",");
+        }
+        if (from != null) {
+            body.append("\"boardingStopId\":\"").append(from).append("\",");
+        }
+        if (to != null) {
+            body.append("\"destinationStopId\":\"").append(to).append("\",");
+        }
+        if (date != null) {
+            body.append("\"travelDate\":\"").append(date).append("\",");
+        }
+        if (body.charAt(body.length() - 1) == ',') {
+            body.setLength(body.length() - 1);
+        }
+        return body.append("}").toString();
+    }
+
+    /** Booking checks the date against the real clock, as registration does, so these tests ask the same clock. */
+    private static String inDays(int days) {
+        return Dates.today().plusDays(days).toString();
+    }
+
+    @Test
+    public void bookingATicketAnswers201WithTheNewTicketAndTheFare() throws Exception {
+        Reply reply = post("/api/tickets", booking(1, "R100", "S1", "S5", inDays(0)));
+
+        assertEquals(201, reply.status);
+        JsonNode ticket = reply.json.get("ticket");
+        assertEquals(11, ticket.get("ticketId").asInt());
+        assertEquals(1, ticket.get("passengerId").asInt());
+        assertEquals("R100", ticket.get("routeNo").asText());
+        assertEquals("S1", ticket.get("boardingStopId").asText());
+        assertEquals("S5", ticket.get("plannedDestinationStopId").asText());
+        assertEquals(inDays(0), ticket.get("travelDate").asText());
+        assertEquals(69, ticket.get("quotedFare").asInt());
+        assertEquals("ACTIVE", ticket.get("status").asText());
+        assertTrue(ticket.get("qrCode").asText().matches("MLK-[A-HJ-NP-Z2-9]{8}"));
+        assertEquals(500, reply.json.get("balance").asInt());
+        assertTrue(reply.json.get("canPayNow").asBoolean());
+        assertTrue(reply.json.get("message").asText().contains("LKR 69"));
+    }
+
+    @Test
+    public void aBookedTicketAppearsInTheTicketListAndCanBeScanned() throws Exception {
+        String qr = post("/api/tickets", booking(1, "R100", "S1", "S5", inDays(0)))
+                .json.get("ticket").get("qrCode").asText();
+
+        Reply listed = get("/api/tickets");
+        boolean found = false;
+        for (JsonNode t : listed.json) {
+            found |= t.get("qrCode").asText().equals(qr);
+        }
+        assertTrue(found);
+
+        String now = java.time.Instant.now().toString();
+        Reply in = scan(qr, "IN", "S1", now);
+        assertEquals("JOURNEY_STARTED", in.json.get("outcome").asText());
+        Reply out = scan(qr, "OUT", "S5", java.time.Instant.now().plusSeconds(1800).toString());
+        assertEquals("JOURNEY_COMPLETED", out.json.get("outcome").asText());
+        assertEquals("the quoted fare is the fare charged", 69, out.json.get("fare").get("charged").asInt());
+        assertEquals(431, get("/api/passengers/1/account").json.get("passenger").get("balance").asInt());
+    }
+
+    @Test
+    public void bookingTakesNoMoney() throws Exception {
+        post("/api/tickets", booking(1, "R100", "S1", "S5", inDays(0)));
+
+        Reply statement = get("/api/passengers/1/account");
+        assertEquals(500, statement.json.get("passenger").get("balance").asInt());
+        assertEquals(0, statement.json.get("charges").size());
+    }
+
+    @Test
+    public void aQuoteAnswers200WithTheFareAndCreatesNoTicket() throws Exception {
+        Reply reply = post("/api/tickets/quote", booking(1, "R100", "S1", "S5", inDays(0)));
+
+        assertEquals(200, reply.status);
+        assertEquals(69, reply.json.get("fare").asInt());
+        assertEquals("DISTANCE", reply.json.get("fareType").asText());
+        assertEquals(10.8, reply.json.get("distanceKm").asDouble(), 0.0001);
+        assertEquals(500, reply.json.get("balance").asInt());
+        assertTrue(reply.json.get("canPayNow").asBoolean());
+        assertEquals(10, get("/api/tickets").json.size());
+    }
+
+    @Test
+    public void aFlatRouteQuoteSaysFlat() throws Exception {
+        Reply reply = post("/api/tickets/quote", booking(1, "R200", "S1", "S3", inDays(1)));
+
+        assertEquals(30, reply.json.get("fare").asInt());
+        assertEquals("FLAT", reply.json.get("fareType").asText());
+    }
+
+    @Test
+    public void aBookingWithEverythingMissingNamesEveryField() throws Exception {
+        Reply reply = post("/api/tickets", booking(1, null, null, null, null));
+
+        assertEquals(400, reply.status);
+        assertEquals("VALIDATION", reply.json.get("error").asText());
+        assertEquals(List.of("routeNo", "boardingStopId", "destinationStopId", "travelDate"), paths(reply));
+        assertEquals(10, get("/api/tickets").json.size());
+    }
+
+    @Test
+    public void aBookingWithWrongStopsAndDateNamesBoth() throws Exception {
+        Reply reply = post("/api/tickets", booking(1, "R200", "S1", "S5", inDays(-1)));
+
+        assertEquals(400, reply.status);
+        assertEquals("VALIDATION", reply.json.get("error").asText());
+        assertEquals(List.of("destinationStopId", "travelDate"), paths(reply));
+    }
+
+    @Test
+    public void aQuoteIsRefusedTheSameWay() throws Exception {
+        Reply reply = post("/api/tickets/quote", booking(1, "R999", "S1", "S5", inDays(31)));
+
+        assertEquals(400, reply.status);
+        assertEquals(List.of("routeNo", "travelDate"), paths(reply));
+    }
+
+    @Test
+    public void aBookingForACustomerWhoDoesNotExistIs404() throws Exception {
+        Reply reply = post("/api/tickets", booking(99, "R100", "S1", "S5", inDays(0)));
+
+        assertEquals(404, reply.status);
+        assertEquals("NOT_FOUND", reply.json.get("error").asText());
+    }
+
+    @Test
+    public void aBookingWithoutAValidPassengerIdIsAMalformedRequest() throws Exception {
+        Reply missing = post("/api/tickets", booking(null, "R100", "S1", "S5", inDays(0)));
+        Reply text = post("/api/tickets", booking("\"one\"", "R100", "S1", "S5", inDays(0)));
+        Reply zero = post("/api/tickets", booking(0, "R100", "S1", "S5", inDays(0)));
+
+        for (Reply reply : new Reply[] {missing, text, zero}) {
+            assertEquals(400, reply.status);
+            assertEquals(List.of("passengerId"), paths(reply));
+        }
+    }
+
+    @Test
+    public void aTravelDateThatIsNotADateIsAMalformedRequest() throws Exception {
+        Reply reply = post("/api/tickets", booking(1, "R100", "S1", "S5", "next friday"));
+
+        assertEquals(400, reply.status);
+        assertEquals(List.of("travelDate"), paths(reply));
+    }
+
+    @Test
+    public void aCustomerWithoutEnoughCreditStillGetsTheTicketAndIsToldToAddCredit() throws Exception {
+        Reply reply = post("/api/tickets", booking(3, "R100", "S1", "S3", inDays(0)));
+
+        assertEquals(201, reply.status);
+        assertFalse(reply.json.get("canPayNow").asBoolean());
+        assertEquals(10, reply.json.get("balance").asInt());
+        assertTrue(reply.json.get("message").asText().contains("add credit"));
+    }
+
+    @Test
+    public void aNewlyRegisteredCustomerCanBookAndSeesOnlyTheirOwnTicket() throws Exception {
+        int userId = register("amaya@example.com").json.get("userId").asInt();
+
+        Reply booked = post("/api/tickets", booking(userId, "R100", "S1", "S3", inDays(2)));
+
+        assertEquals(201, booked.status);
+        assertEquals(userId, booked.json.get("ticket").get("passengerId").asInt());
+        assertEquals("Amaya Jayasuriya", booked.json.get("ticket").get("passengerName").asText());
+        assertFalse("no credit yet", booked.json.get("canPayNow").asBoolean());
+        int ticketId = booked.json.get("ticket").get("ticketId").asInt();
+        long theirs = 0;
+        long others = 0;
+        for (JsonNode t : get("/api/tickets").json) {
+            if (t.get("passengerId").asInt() == userId) {
+                theirs++;
+                assertEquals(ticketId, t.get("ticketId").asInt());
+            } else if (t.get("ticketId").asInt() == ticketId) {
+                others++;
+            }
+        }
+        assertEquals(1, theirs);
+        assertEquals(0, others);
+    }
+
+    @Test
+    public void aTouristCannotBookPastTheVisaOverHttp() throws Exception {
+        // The demo tourists' visas are dated from the demo date, not the real clock, so register a tourist the real
+        // clock knows about.
+        Reply tourist = post("/api/onboarding/register",
+                registration("Lena Fischer", "lena.fischer@example.com", PASSWORD, "NON_RESIDENT", visaInDays(5)));
+        int userId = tourist.json.get("userId").asInt();
+
+        assertEquals(201, post("/api/tickets", booking(userId, "R100", "S1", "S3", inDays(5))).status);
+        Reply late = post("/api/tickets", booking(userId, "R100", "S1", "S3", inDays(6)));
+
+        assertEquals(400, late.status);
+        assertEquals(List.of("travelDate"), paths(late));
     }
 }

@@ -4,17 +4,18 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import java.time.Instant;
+import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.Before;
 import org.junit.Test;
 
 /** Rules A1 to A4 as the passenger meets them at the reader. */
-public class AccountKindsTest {
+public class AccountKindsTest extends OnEveryStore {
 
     private Fixture f;
 
     @Before
     public void setUp() {
-        f = new Fixture();
+        f = new Fixture(open(Fixture.TODAY));
     }
 
     @Test
@@ -50,7 +51,7 @@ public class AccountKindsTest {
 
         assertEquals(ScanOutcome.JOURNEY_COMPLETED, lastMinute.getOutcome());
 
-        Fixture other = new Fixture();
+        Fixture other = new Fixture(open(Fixture.TODAY));
         other.in("MLK-TOURIST1", "S1", Fixture.MORNING);
         ScanResult tooLate = other.out("MLK-TOURIST1", "S3", firstMinuteAfter);
 

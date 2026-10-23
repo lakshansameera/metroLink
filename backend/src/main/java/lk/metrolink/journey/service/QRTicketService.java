@@ -5,6 +5,7 @@ import java.util.Optional;
 import lk.metrolink.journey.domain.InvalidTicketReason;
 import lk.metrolink.journey.domain.Journey;
 import lk.metrolink.journey.domain.QRTicket;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.JourneyRepository;
 import lk.metrolink.journey.repository.TicketRepository;
 
@@ -28,12 +29,14 @@ public final class QRTicketService {
     public TicketCheck validate(String qrCode, LocalDate today) {
         Optional<QRTicket> found = tickets.findByQrCode(qrCode);
         if (found.isEmpty()) {
+            Log.info(Log.SERVICE, "QRTicketService.validate: no ticket has the code %s -> UNKNOWN_TOKEN", qrCode);
             return TicketCheck.refused(InvalidTicketReason.UNKNOWN_TOKEN, null);
         }
         QRTicket ticket = found.get();
 
         Optional<InvalidTicketReason> own = ticket.refusalReason(today);
         if (own.isPresent()) {
+            Log.info(Log.SERVICE, "QRTicketService.validate: the ticket refused itself -> %s", own.get());
             return TicketCheck.refused(own.get(), ticket);
         }
 
@@ -44,8 +47,11 @@ public final class QRTicketService {
             InvalidTicketReason reason = existing.get().isOpen()
                     ? InvalidTicketReason.ALREADY_BOARDED
                     : InvalidTicketReason.TICKET_ALREADY_USED;
+            Log.info(Log.SERVICE, "QRTicketService.validate: ticket #%d already has a journey -> %s",
+                    ticket.getTicketId(), reason);
             return TicketCheck.refused(reason, ticket);
         }
+        Log.info(Log.SERVICE, "QRTicketService.validate: ticket #%d may start a journey", ticket.getTicketId());
         return TicketCheck.ok(ticket);
     }
 }

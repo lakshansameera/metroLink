@@ -1,5 +1,7 @@
-import { dayOf, ticketLabel, todayInColombo } from '../format';
+import { useEffect, useRef } from 'react';
+import { dayOf, todayInColombo } from '../format';
 import type { Journey, Ticket } from '../types';
+import { StateBadge } from './StateBadge';
 
 interface Props {
   tickets: Ticket[];
@@ -8,18 +10,27 @@ interface Props {
   onSelect: (ticket: Ticket) => void;
 }
 
-/** What a ticket can do today, in a few words. */
-function note(ticket: Ticket, journey: Journey | undefined, today: string): string {
-  if (journey) return journey.status === 'COMPLETED' ? 'Journey finished' : journey.status === 'IN_PROGRESS' ? 'On board' : 'Fare owed';
-  if (ticket.status !== 'ACTIVE') return ticketLabel[ticket.status];
-  if (ticket.travelDate < today) return 'For an earlier day';
-  if (ticket.travelDate > today) return 'For a later day';
+/**
+ * A hint about the travel date, for a ticket that is ACTIVE and has no journey. The states themselves are shown by
+ * the badges, exactly as the server has them, so this says nothing about a state. A ticket for another day stays
+ * ACTIVE on the server (nothing expires it by itself) and the reader refuses it, which is what the hint says.
+ */
+function dateNote(ticket: Ticket, journey: Journey | undefined, today: string): string {
+  if (journey || ticket.status !== 'ACTIVE') return '';
+  if (ticket.travelDate < today) return 'For an earlier day, so the reader refuses it';
+  if (ticket.travelDate > today) return 'For a later day, so the reader refuses it';
   return 'Ready to travel';
 }
 
 export function TicketList({ tickets, journeys, selected, onSelect }: Props) {
   const today = todayInColombo();
   const byTicket = new Map(journeys.map((j) => [j.ticketId, j]));
+
+  // A ticket just booked may sit below the fold of a long list, so bring the chosen one into view.
+  const chosen = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    chosen.current?.scrollIntoView({ block: 'nearest' });
+  }, [selected, tickets.length]);
 
   return (
     <section className="panel" aria-labelledby="tickets-title">
@@ -30,7 +41,7 @@ export function TicketList({ tickets, journeys, selected, onSelect }: Props) {
           const journey = byTicket.get(ticket.ticketId);
           const isSelected = ticket.qrCode === selected;
           return (
-            <li key={ticket.ticketId}>
+            <li key={ticket.ticketId} ref={isSelected ? chosen : undefined}>
               <button type="button" className="ticket" aria-pressed={isSelected} onClick={() => onSelect(ticket)}>
                 <span className="ticket-trip">
                   {ticket.boardingStopName} to {ticket.plannedDestinationStopName}
@@ -39,7 +50,11 @@ export function TicketList({ tickets, journeys, selected, onSelect }: Props) {
                 <span className="ticket-date">
                   Travel date <time dateTime={ticket.travelDate}>{dayOf(ticket.travelDate)}</time>
                 </span>
-                <span className="ticket-note">{note(ticket, journey, today)}</span>
+                <span className="ticket-note">{dateNote(ticket, journey, today)}</span>
+                <span className="ticket-states">
+                  <StateBadge kind="Ticket" state={ticket.status} />
+                  {journey && <StateBadge kind="Journey" state={journey.status} />}
+                </span>
                 <span className="ticket-who">
                   {ticket.passengerName}, {ticket.qrCode}
                 </span>

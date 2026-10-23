@@ -142,6 +142,7 @@ button:disabled {
   padding: 0 1rem 3rem;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
+    'book'
     'tickets'
     'line'
     'glass'
@@ -149,6 +150,7 @@ button:disabled {
     'journeys';
 }
 
+.area-book { grid-area: book; }
 .area-tickets { grid-area: tickets; }
 .area-line { grid-area: line; }
 .area-glass { grid-area: glass; }
@@ -159,6 +161,7 @@ button:disabled {
   .shell {
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
     grid-template-areas:
+      'book glass'
       'tickets glass'
       'line glass'
       'people journeys';
@@ -168,7 +171,7 @@ button:disabled {
   .area-glass {
     position: sticky;
     top: 1rem;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
   }
 }
 
@@ -261,6 +264,14 @@ button:disabled {
 
 .ticket-note {
   text-align: right;
+}
+
+.ticket-states {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
 }
 
 .ticket-who {
@@ -550,8 +561,11 @@ button:disabled {
   gap: 1rem;
 }
 
-.journey-status {
-  font-weight: 600;
+.journey-states {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
 .journey-trip {
@@ -629,7 +643,8 @@ button:disabled {
 .field input[type='text'],
 .field input[type='email'],
 .field input[type='password'],
-.field input[type='date'] {
+.field input[type='date'],
+.field select {
   width: 100%;
   padding: 0.55rem 0.7rem;
   font: inherit;
@@ -639,12 +654,18 @@ button:disabled {
   border-radius: 8px;
 }
 
-.field input:focus-visible {
+.field select:disabled {
+  opacity: 0.6;
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 1px;
 }
 
-.field-bad input {
+.field-bad input,
+.field-bad select {
   border-color: var(--bad-ink);
 }
 
@@ -761,3 +782,138 @@ button:disabled {
 .login .hint {
   margin-top: 0.75rem;
 }
+
+/* ---------- booking ---------- */
+
+.field-row {
+  display: grid;
+  align-items: start;
+  gap: 0 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 34rem) {
+  .field-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.quote,
+.booked {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--line-tint);
+  border-left: 5px solid var(--line);
+}
+
+.booked {
+  border-left-color: var(--go);
+  font-weight: 600;
+}
+
+.quote p {
+  margin: 0;
+}
+
+.quote-fare {
+  font-family: var(--signage);
+  font-size: 1.35rem;
+}
+
+.quote-note {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* ---------- states: a ticket's or a journey's state, spelled as the server spells it ---------- */
+
+.state {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.state-kind {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.state-name {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.state-active,
+.state-in_progress { background: var(--line-tint); border-color: var(--line); }
+.state-used { background: transparent; }
+.state-expired,
+.state-cancelled { border-color: var(--stop); }
+.state-expired .state-name,
+.state-cancelled .state-name { color: var(--bad-ink); }
+.state-payment_pending { background: var(--wait); border-color: var(--wait); color: var(--wait-ink); }
+.state-payment_pending .state-kind { color: var(--wait-ink); }
+.state-completed { background: var(--go); border-color: var(--go); color: #fff; }
+.state-completed .state-kind { color: #fff; opacity: 0.85; }
+
+/* On the reader face the colour already says how it went, so the states are plain chips on the panel colour. */
+.glass-states {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.glass .state {
+  background: var(--panel);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.glass .state .state-kind { color: var(--ink-soft); opacity: 1; }
+.glass .state .state-name { color: var(--ink); }
+
+/* ---------- trip against the ticket: Over-travel, Shorter trip, Over-charged ---------- */
+
+.trip-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.trip-chip {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.trip-over { border-color: var(--stop); color: var(--bad-ink); background: transparent; }
+.trip-shorter { background: var(--line-tint); border-color: var(--line); color: var(--ink); }
+.trip-boarded { background: var(--wait); border-color: var(--wait); color: var(--wait-ink); }
+
+.journey-compare {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* On the reader face the colour already says how it went, so the chips sit on the panel colour like the states do. */
+.glass .trip-chip {
+  background: var(--panel);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.glass .trip-over { color: var(--bad-ink); }

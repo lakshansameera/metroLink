@@ -27,6 +27,14 @@
       <artifactId>jackson-datatype-jsr310</artifactId>
       <version>${jackson.version}</version>
     </dependency>
+    <!-- The database. H2 runs inside the server and keeps its data in a file, so nothing else needs installing.
+         The code only uses java.sql, so another database means another driver here and a different METROLINK_DB. -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>2.3.232</version>
+      <scope>runtime</scope>
+    </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
@@ -51,6 +59,8 @@
             <configuration>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <transformers>
+                <!-- Merges META-INF/services files, which is how JDBC finds the H2 driver inside the one jar. -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>lk.metrolink.journey.App</mainClass>
                 </transformer>

@@ -8,17 +8,18 @@ import static org.junit.Assert.assertTrue;
 import java.time.Instant;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.TicketState;
+import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.Before;
 import org.junit.Test;
 
 /** Rules B1 to B6, plus D6 (dates are Colombo dates). */
-public class BoardingTest {
+public class BoardingTest extends OnEveryStore {
 
     private Fixture f;
 
     @Before
     public void setUp() {
-        f = new Fixture();
+        f = new Fixture(open(Fixture.TODAY));
     }
 
     private void assertRejected(ScanResult result, RejectionReason reason) {
@@ -77,6 +78,30 @@ public class BoardingTest {
         f.out("MLK-PENDING", "S5", Fixture.LATER);                                              // too little credit
 
         assertRejected(f.in("MLK-PENDING", "S1", Fixture.LATER), RejectionReason.TICKET_ALREADY_USED);
+    }
+
+    @Test
+    public void tappingInAtAnotherStopBeforeThePlannedDestinationIsAllowedAndNoted() {           // B4, X9
+        ScanResult result = f.in("MLK-HAPPY01", "S2", Fixture.MORNING);                          // the ticket says S1
+
+        assertEquals(ScanOutcome.JOURNEY_STARTED, result.getOutcome());
+        assertTrue(result.getTrip().boardedOffTicket());
+        assertNull("not decided until the exit", result.getTrip().kind());
+        assertEquals("S2", f.journeyOf("MLK-HAPPY01").getBoardingStopId());
+        assertEquals("the planned fare is checked from where they really boarded",
+                Long.valueOf(60), result.getRequired());
+    }
+
+    @Test
+    public void tappingInAtTheTicketsOwnStopAddsNothingToNote() {                                // X9
+        ScanResult result = f.in("MLK-HAPPY01", "S1", Fixture.MORNING);
+
+        assertNull(result.getTrip());
+    }
+
+    @Test
+    public void aRefusedTapInCarriesNoComparison() {                                             // B4
+        assertNull(f.in("MLK-HAPPY01", "S6", Fixture.MORNING).getTrip());
     }
 
     @Test

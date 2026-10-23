@@ -1,6 +1,7 @@
 package lk.metrolink.journey.domain;
 
 import java.time.Instant;
+import lk.metrolink.journey.log.Log;
 
 public class Journey {
 
@@ -29,6 +30,8 @@ public class Journey {
     }
 
     public static Journey start(long ticketId, String routeNo, String boardingStopId, Instant tapInTime) {
+        Log.info(Log.FACTORY, "Journey.start: new journey for ticket #%d at stop %s, starts in the IN_PROGRESS state",
+                ticketId, boardingStopId);
         return new Journey(0, ticketId, routeNo, boardingStopId, tapInTime, null, null, null, null,
                 new InProgressState());
     }
@@ -50,10 +53,13 @@ public class Journey {
     }
 
     public void recordExit(String exitStopId, Instant tapOutTime, long fareDue) {
-        state = state.recordExit(journeyId);
+        JourneyState before = state;
+        state = before.recordExit(journeyId);
         this.exitStopId = exitStopId;
         this.tapOutTime = tapOutTime;
         this.fareDue = fareDue;
+        Log.info(Log.STATE, "Journey #%d: %s -> %s (%s.recordExit: left at %s, fare due LKR %d)", journeyId,
+                before.name(), state.name(), before.getClass().getSimpleName(), exitStopId, fareDue);
     }
 
     private void requireExitRecorded() {
@@ -66,6 +72,8 @@ public class Journey {
     public void markPaymentPending() {
         JourneyState next = state.markPaymentPending(journeyId);
         requireExitRecorded();
+        Log.info(Log.STATE, "Journey #%d: %s -> %s (%s.markPaymentPending: the fare of LKR %d is unpaid)", journeyId,
+                state.name(), next.name(), state.getClass().getSimpleName(), fareDue);
         state = next;
     }
 
@@ -73,6 +81,8 @@ public class Journey {
         JourneyState next = state.complete(journeyId);
         requireExitRecorded();
         this.fareCharged = fareCharged;
+        Log.info(Log.STATE, "Journey #%d: %s -> %s (%s.complete: LKR %d charged)", journeyId, state.name(),
+                next.name(), state.getClass().getSimpleName(), fareCharged);
         state = next;
     }
 

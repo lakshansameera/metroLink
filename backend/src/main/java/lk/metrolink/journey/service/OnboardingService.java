@@ -5,12 +5,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lk.metrolink.journey.domain.Dates;
 import lk.metrolink.journey.domain.DomainException;
 import lk.metrolink.journey.domain.InvalidRegistrationException;
 import lk.metrolink.journey.domain.OnboardingRequest;
 import lk.metrolink.journey.domain.Passenger;
 import lk.metrolink.journey.domain.PasswordHash;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.CredentialRepository;
 import lk.metrolink.journey.repository.PassengerRepository;
@@ -73,15 +75,21 @@ public final class OnboardingService {
 
     /** {@code at} is the moment of registration; its Colombo date decides whether a visa date is still in the future. */
     public AuthResult register(OnboardingRequest request, Instant at) {
+        Log.info(Log.SERVICE, "OnboardingService.register: a new customer asks to register");
         List<OnboardingRequest.Problem> problems = request.problems(Dates.localDate(at));       // O1, O3
         if (!problems.isEmpty()) {
+            Log.info(Log.SERVICE, "OnboardingRequest.problems: refused, %d wrong field(s): %s", problems.size(),
+                    problems.stream().map(OnboardingRequest.Problem::getField).collect(Collectors.joining(", ")));
             throw new InvalidRegistrationException(problems);
         }
         // Hashing is slow on purpose, so it is done before the lock is taken.
         PasswordHash hash = PasswordHash.of(request.getPassword(), hashIterations);             // O6
+        Log.info(Log.SERVICE, "OnboardingService.register: password hashed with PBKDF2 (%d repeats); only the hash is kept",
+                hashIterations);
 
         return uow.run(() -> {
             if (passengers.findByEmail(request.getEmail()).isPresent()) {                       // O2
+                Log.info(Log.SERVICE, "OnboardingService.register: that email is already registered -> EMAIL_TAKEN");
                 throw new DomainException("This email is already registered", "EMAIL_TAKEN", 409);
             }
             Passenger passenger = passengers.insert(
@@ -90,6 +98,8 @@ public final class OnboardingService {
             accounts.insert(passenger.openAccount(0));                                          // createAccount, O3, O4
 
             PassengerView customer = queries.passenger(passenger.getPassengerId());              // O9
+            Log.info(Log.SERVICE, "OnboardingService.register: customer #%d registered with a %s account and LKR %d credit",
+                    customer.getPassengerId(), customer.getAccountType(), customer.getBalance());
             return new AuthResult(customer.getPassengerId(), welcome(customer), customer);      // registrationSuccess
         });
     }
@@ -99,16 +109,36 @@ public final class OnboardingService {
         String wanted = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
         String typed = password == null ? "" : password;
 
-        Optional<Passenger> found = uow.run(() -> passengers.findByEmail(wanted));
-        Optional<PasswordHash> stored = found.flatMap(p -> uow.run(() -> credentials.findByPassenger(p.getPassengerId())));
+        // Both look-ups happen in one unit of work. The slow hash check comes after it, outside the lock.
+        Lookup lookup = uow.run(() -> {
+            Optional<Passenger> person = passengers.findByEmail(wanted);
+            return new Lookup(person, person.flatMap(p -> credentials.findByPassenger(p.getPassengerId())));
+        });
+        Optional<Passenger> found = lookup.passenger;
+        Optional<PasswordHash> stored = lookup.hash;
 
         // Always run one hash check, even when there is nobody to check against.
         boolean passwordMatches = stored.orElse(NOBODY).matches(typed);
         if (stored.isEmpty() || !passwordMatches) {
+            Log.warn(Log.SERVICE, "OnboardingService.login: refused -> INVALID_LOGIN (the same answer for a wrong password"
+                    + " and an unknown email)");
             throw new DomainException("Invalid login", "INVALID_LOGIN", 401);
         }
         PassengerView customer = queries.passenger(found.get().getPassengerId());               // loginSuccess
+        Log.info(Log.SERVICE, "OnboardingService.login: customer #%d logged in (nothing is remembered on the server)",
+                customer.getPassengerId());
         return new AuthResult(customer.getPassengerId(), "Welcome back, " + customer.getName() + ".", customer);
+    }
+
+    /** Who the typed email belongs to, if anyone, and the hash that was stored for them. */
+    private static final class Lookup {
+        private final Optional<Passenger> passenger;
+        private final Optional<PasswordHash> hash;
+
+        private Lookup(Optional<Passenger> passenger, Optional<PasswordHash> hash) {
+            this.passenger = passenger;
+            this.hash = hash;
+        }
     }
 
     private static String welcome(PassengerView customer) {

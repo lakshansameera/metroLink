@@ -15,28 +15,33 @@ import lk.metrolink.journey.domain.Account;
 import lk.metrolink.journey.domain.Passenger;
 import lk.metrolink.journey.domain.PasswordHash;
 import lk.metrolink.journey.domain.Resident;
-import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
-import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
-import lk.metrolink.journey.repository.memory.InMemoryDatabase;
-import lk.metrolink.journey.repository.memory.InMemoryPassengerRepository;
-import lk.metrolink.journey.repository.memory.InMemoryTicketRepository;
 import org.junit.Before;
 import org.junit.Test;
 
-public class InMemoryDatabaseTest {
+/**
+ * The unit of work and the ids the store hands out: rollback, nesting, copies, locking. The same on every store, so a
+ * change that is undone in memory is undone in SQL too.
+ */
+public class UnitOfWorkTest extends OnEveryStore {
 
     private static final LocalDate TODAY = LocalDate.parse("2026-10-21");
     private static final Instant NOW = Instant.parse("2026-10-21T04:00:00Z");
 
-    private InMemoryDatabase db;
+    private Store store;
+    private UnitOfWork db;
     private AccountRepository accounts;
     private TicketRepository tickets;
+    private PassengerRepository passengers;
+    private CredentialRepository credentials;
 
     @Before
     public void setUp() {
-        db = InMemoryDatabase.seeded(TODAY);
-        accounts = new InMemoryAccountRepository(db);
-        tickets = new InMemoryTicketRepository(db);
+        store = open(TODAY);
+        db = store.unitOfWork();
+        accounts = store.accounts();
+        tickets = store.tickets();
+        passengers = store.passengers();
+        credentials = store.credentials();
     }
 
     @Test
@@ -130,7 +135,7 @@ public class InMemoryDatabaseTest {
             accounts.save(account);
         });
 
-        db.reset(TODAY);
+        store.reset(TODAY);
 
         assertEquals(500, db.run(() -> accounts.findById(1).orElseThrow().getBalance()).longValue());
     }
@@ -177,9 +182,6 @@ public class InMemoryDatabaseTest {
 
     @Test
     public void aFailedRegistrationRollsBackEveryRowItAddedAndGivesTheIdsBack() {
-        InMemoryPassengerRepository passengers = new InMemoryPassengerRepository(db);
-        InMemoryCredentialRepository credentials = new InMemoryCredentialRepository(db);
-
         try {
             db.run(() -> {
                 Passenger saved = passengers.insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident()));

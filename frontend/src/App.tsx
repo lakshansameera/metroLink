@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from './api';
+import { BookTicket } from './components/BookTicket';
 import { JourneyList } from './components/JourneyList';
 import { Onboarding } from './components/Onboarding';
 import { PassengerList } from './components/PassengerList';
 import { ReaderGlass } from './components/ReaderGlass';
 import { RouteLine } from './components/RouteLine';
 import { TicketList } from './components/TicketList';
-import type { Direction, Journey, Passenger, ReaderDisplay, Reference, Ticket } from './types';
+import type { BookingResult, Direction, Journey, Passenger, ReaderDisplay, Reference, Ticket } from './types';
 
 type View = 'reader' | 'onboarding';
 
@@ -99,6 +100,14 @@ export function App() {
       if (shown.outcome === 'JOURNEY_STARTED' && shown.ticket) setStopId(shown.ticket.plannedDestinationStopId);
     });
 
+  /** A ticket was just booked: reload, then have the Reader ready to use it. */
+  function booked(result: BookingResult) {
+    setToken(result.ticket.qrCode);
+    setResult(null);
+    setStopId(result.ticket.boardingStopId);
+    void run(async () => {});
+  }
+
   const settle = (journeyId: number) => run(async () => setResult(await api.settle(journeyId)));
   const topUp = (passengerId: number, amount: number) => run(async () => void (await api.addCredit(passengerId, amount)));
 
@@ -168,6 +177,10 @@ export function App() {
         <p className="loading">{error ? '' : 'Loading the network.'}</p>
       ) : (
         <main className="shell">
+          <div className="area-book">
+            <BookTicket reference={reference} passengerId={loggedIn!.passengerId} onBooked={booked} />
+          </div>
+
           <div className="area-tickets">
             <TicketList tickets={shownTickets} journeys={shownJourneys} selected={token} onSelect={pick} />
           </div>
@@ -193,7 +206,7 @@ export function App() {
             <PassengerList passengers={shownPassengers} onTopUp={topUp} busy={busy} />
           </div>
           <div className="area-journeys">
-            <JourneyList journeys={shownJourneys} onSettle={settle} busy={busy} />
+            <JourneyList journeys={shownJourneys} tickets={shownTickets} onSettle={settle} busy={busy} />
           </div>
         </main>
       )}

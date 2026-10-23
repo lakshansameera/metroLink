@@ -3,3 +3,9 @@ node_modules/
 dist/
 .idea/
 *.iml
+# H2 database files, made when the server runs
+/data/
+backend/data/
+*.mv.db
+*.trace.db
+*.lock.db

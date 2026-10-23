@@ -247,14 +247,53 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.ticket-date,
 .ticket-who,
 .ticket-note {
   color: var(--ink-soft);
   font-size: 0.9375rem;
 }
 
+.ticket-date time {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .ticket-note {
   text-align: right;
+}
+
+.ticket-who {
+  grid-column: 1 / -1;
+}
+
+/* ---------- logged-in customer ---------- */
+
+.whoami-wrap {
+  max-width: 76rem;
+  margin: 0 auto 1rem;
+  padding: 0 1rem;
+}
+
+.whoami {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--line-tint);
+  border-left: 4px solid var(--line);
+}
+
+.whoami p {
+  margin: 0;
+}
+
+.whoami-email {
+  margin-left: 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
 }
 
 /* ---------- the line ---------- */

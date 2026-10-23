@@ -192,13 +192,13 @@ This is the "New user - Registration" and "Existing user - Login" part of the To
 3. **All problems at once.** A customer should not have to fix one field, submit, and then find the next.
 4. **The server decides, the browser displays** (decision 5 in section 6). The form has no rules of its own. It shows what the server says, field by field.
 5. **Demo customers have a password too.** All five use `Demo@1234`, with a cheap hash (1,000 repeats) so the server starts fast. New customers get the full 120,000.
-6. **Login only checks.** It returns the customer and does not create a session or token, because the diagram ends at `loginSuccess(userId)`.
+6. **Login only checks.** It returns the customer and does not create a session or token, because the diagram ends at `loginSuccess(userId)`. The screen remembers who logged in, in memory, and opens the Reader tab with only that customer's account, tickets and journeys, and a Log out button. This is a display choice, not security: the server still sends every ticket to anyone who asks, and the browser filters them. Real protection would need a session or token and a check on each request (see Not built). With nobody logged in the Reader shows everyone, as a station demo.
 
 ### Not built
 
 These are real gaps. They are listed so nobody assumes they exist.
 
-- **No session or token.** After logging in, nothing is remembered. No endpoint requires a login.
+- **No session or token.** After logging in, the server remembers nothing. The screen remembers who logged in only until the page is reloaded. No endpoint requires a login, so the Reader's "only your tickets" view is a display filter in the browser, not access control.
 - **No email check.** An email only has to look like an address. Nothing is sent to it.
 - **No lockout or rate limit.** Someone can try passwords as fast as the server answers.
 - **No HTTPS.** The server speaks plain HTTP, so a password crosses the network readable. Use HTTPS in front of a real deployment.

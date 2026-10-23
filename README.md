@@ -64,9 +64,10 @@ Open the **New customer** tab. Registrations are kept in memory, and "Start over
 | Choose Resident, fill in the rest, open the account | "Account opened": a **permanent** account with LKR 0, and the customer number, kind and balance on the card. The new customer is in the Passengers list on the Reader tab |
 | Choose Non-resident | A visa expiry date field appears. Leave it empty or pick a past date and you are told. A date of today or later gives a **temporary** account that works until that date |
 | Register the same email again, even in capitals or with spaces | "This email is already registered" |
-| Log in with the email and password you just used | "Logged in", showing the same account |
+| Log in with the email and password you just used | The **Reader** tab opens with "Logged in as ..." and a Log out button. It shows only that customer's account, tickets and journeys, and every ticket shows its travel date. A new customer has no tickets yet |
 | Log in with a wrong password, or with an email nobody has | The same message for both: "That email and password do not match an account." |
-| Log in as `nimal@example.com` with `Demo@1234` | Works. All five demo customers use the password `Demo@1234` |
+| Log in as `nimal@example.com` with `Demo@1234` | Works, and the Reader tab shows his six tickets. All five demo customers use the password `Demo@1234`. Log in as `sanduni@example.com` and you see her one ticket instead |
+| Press Log out | Back to the New customer screen. The Reader tab shows everyone again, as it did before anyone logged in |
 | On the Reader tab, add credit to the new customer in the Passengers list | The balance goes up, but there are no tickets: issuing tickets is another function |
 
 The rules are O1 to O9 in `docs/rules.md`. Section 8 of `docs/design.md` shows how each message in the sequence diagram maps to code.

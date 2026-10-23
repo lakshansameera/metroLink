@@ -1,11 +1,13 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
 import { dayOf, lkr, todayInColombo } from '../format';
-import type { AuthResult, Residency } from '../types';
+import type { AuthResult, Passenger, Residency } from '../types';
 
 interface Props {
   /** Reload the lists after a customer joins, so the Reader screen shows the new person at once. */
   onChanged: () => Promise<void>;
+  /** A customer logged in. The app moves on to the Reader screen, showing only that customer's things. */
+  onLoggedIn: (customer: Passenger) => void;
 }
 
 type Errors = Record<string, string>;
@@ -62,7 +64,7 @@ function Field({ id, label, hint, error, children }: FieldProps) {
  * Customer onboarding: register a new customer, or log in an existing one.
  * Every rule lives on the server. This screen only shows what the server says, field by field.
  */
-export function Onboarding({ onChanged }: Props) {
+export function Onboarding({ onChanged, onLoggedIn }: Props) {
   const ids = useId();
   const id = (field: string) => `${ids}-${field}`;
 
@@ -84,8 +86,8 @@ export function Onboarding({ onChanged }: Props) {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
-  // What happened last, shown on the big face on the right
-  const [outcome, setOutcome] = useState<{ kind: 'registered' | 'loggedIn'; result: AuthResult } | null>(null);
+  // The last registration, shown on the big face on the right
+  const [registered, setRegistered] = useState<AuthResult | null>(null);
 
   async function register(event: FormEvent) {
     event.preventDefault();
@@ -100,7 +102,7 @@ export function Onboarding({ onChanged }: Props) {
         residency: residency || undefined,
         visaExpiry: residency === 'NON_RESIDENT' && visaExpiry ? visaExpiry : undefined,
       });
-      setOutcome({ kind: 'registered', result });
+      setRegistered(result);
       setLoginEmail(result.customer.email);
       setLoginPassword('');
       setName('');
@@ -136,8 +138,8 @@ export function Onboarding({ onChanged }: Props) {
     setLoginError(null);
     try {
       const result = await api.login(loginEmail, loginPassword);
-      setOutcome({ kind: 'loggedIn', result });
       setLoginPassword('');
+      onLoggedIn(result.customer);
     } catch (e) {
       if (e instanceof ApiError && e.code === 'INVALID_LOGIN') {
         // One sentence for both a wrong password and an unknown email, as the server does (rule O8).
@@ -268,7 +270,7 @@ export function Onboarding({ onChanged }: Props) {
       </div>
 
       <div className="area-welcome">
-        <Welcome outcome={outcome} />
+        <Welcome registered={registered} />
 
         <section className="panel login" aria-labelledby="login-title">
           <h2 id="login-title">Already a customer?</h2>
@@ -311,9 +313,9 @@ export function Onboarding({ onChanged }: Props) {
   );
 }
 
-/** The big face on the right: what the last registration or login produced. */
-function Welcome({ outcome }: { outcome: { kind: 'registered' | 'loggedIn'; result: AuthResult } | null }) {
-  if (!outcome) {
+/** The big face on the right: what the last registration produced. */
+function Welcome({ registered }: { registered: AuthResult | null }) {
+  if (!registered) {
     return (
       <section className="glass glass-idle welcome" aria-live="polite">
         <h2>Welcome aboard</h2>
@@ -325,11 +327,11 @@ function Welcome({ outcome }: { outcome: { kind: 'registered' | 'loggedIn'; resu
     );
   }
 
-  const { customer, message } = outcome.result;
+  const { customer, message } = registered;
   const temporary = customer.accountType === 'TEMPORARY';
   return (
     <section className="glass glass-success welcome" aria-live="polite">
-      <h2>{outcome.kind === 'registered' ? 'Account opened' : 'Logged in'}</h2>
+      <h2>Account opened</h2>
       <p className="glass-message">{message}</p>
       <dl className="figures">
         <div>

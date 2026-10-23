@@ -5,12 +5,14 @@ interface Props {
   passengers: Passenger[];
   onTopUp: (passengerId: number, amount: number) => void;
   busy: boolean;
+  /** "Passengers" for the whole network, "Your account" for one logged-in customer. */
+  title?: string;
 }
 
-export function PassengerList({ passengers, onTopUp, busy }: Props) {
+export function PassengerList({ passengers, onTopUp, busy, title = 'Passengers' }: Props) {
   return (
     <section className="panel" aria-labelledby="people-title">
-      <h2 id="people-title">Passengers</h2>
+      <h2 id="people-title">{title}</h2>
       <ul className="people">
         {passengers.map((p) => (
           <li key={p.passengerId}>

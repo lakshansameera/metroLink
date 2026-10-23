@@ -7,4 +7,9 @@ public class CompletedState implements JourneyState{
         return "COMPLETED";
     }
 
+    @Override
+    public boolean isSettled() {
+        return true;
+    }
+
 }

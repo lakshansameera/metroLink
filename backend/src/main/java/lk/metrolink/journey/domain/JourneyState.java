@@ -7,6 +7,16 @@ public interface JourneyState {
         return false;
     }
 
+    /** True once the fare is paid and nothing more can happen to the journey. */
+    default boolean isSettled() {
+        return false;
+    }
+
+    /** True while the passenger has left but the fare is still unpaid. */
+    default boolean isAwaitingPayment() {
+        return false;
+    }
+
     private DomainException illegal(long journeyId, String action) {
         return new DomainException("Journey " + journeyId + " is " + name() + "; cannot " + action,
                 "ILLEGAL_TRANSITION", 409);

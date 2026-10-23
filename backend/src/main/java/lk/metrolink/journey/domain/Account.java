@@ -25,6 +25,8 @@ public abstract class Account {
         return balance;
     }
 
+    public abstract Account copy();
+    
     public abstract String type();
 
     public abstract boolean isUsableAt(Instant at);

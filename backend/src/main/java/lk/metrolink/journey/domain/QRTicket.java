@@ -82,4 +82,13 @@ public class QRTicket {
         state = state.markUsed(qrCode);
     }
 
+    public QRTicket withId(long newTicketId) {
+        return new QRTicket(newTicketId, qrCode, passengerId, routeNo, boardingStopId, plannedDestinationStopId,
+                travelDate, quotedFare, issuedAt, state);
+    }
+
+    public QRTicket copy() {
+        return withId(ticketId);
+    }
+
 }

@@ -107,4 +107,13 @@ public class Journey {
     public JourneyState getState() {
         return state;
     }
+
+    public Journey withId(long newJourneyId) {
+        return new Journey(newJourneyId, ticketId, routeNo, boardingStopId, tapInTime, exitStopId, tapOutTime,
+                fareDue, fareCharged, state);
+    }
+    
+    public Journey copy() {
+        return withId(journeyId);
+    }
 }

@@ -27,4 +27,9 @@ public class TemporaryAccount extends Account {
     public LocalDate getVisaExpiry() {
         return visaExpiry;
     }
+
+    @Override
+    public Account copy() {
+        return new TemporaryAccount(getBalance(), getPassengerId(), getAccountId(), visaExpiry);
+    }
 }

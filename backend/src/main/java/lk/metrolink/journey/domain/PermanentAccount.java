@@ -17,4 +17,9 @@ public class PermanentAccount extends Account{
     public boolean isUsableAt(Instant at) {
         return true;
     }
+
+    @Override
+    public Account copy() {
+        return new PermanentAccount(getBalance(), getPassengerId(), getAccountId());
+    }
 }

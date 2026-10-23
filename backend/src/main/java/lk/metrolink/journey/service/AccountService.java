@@ -5,6 +5,7 @@ import java.util.Optional;
 import lk.metrolink.journey.domain.Account;
 import lk.metrolink.journey.domain.FareTransaction;
 import lk.metrolink.journey.domain.NotFoundException;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.FareTransactionRepository;
 
@@ -37,12 +38,17 @@ public final class AccountService {
     public FareTransaction debitFare(long accountId, long journeyId, long amount, Instant at) {
         Optional<FareTransaction> earlier = findFareTransaction(journeyId);
         if (earlier.isPresent()) {
+            Log.info(Log.ACCOUNT, "AccountService.debitFare: %s was already charged (rule D2), so the first debit is returned"
+                    + " and nothing more is taken", earlier.get().getReference());
             return earlier.get();
         }
         Account account = accounts.findById(accountId)
                 .orElseThrow(() -> new NotFoundException("Account " + accountId));
+        long balanceBefore = account.getBalance();
         long balanceAfter = account.deduct(amount, at);
         accounts.save(account);
+        Log.info(Log.ACCOUNT, "AccountService.debitFare: %s took LKR %d from account #%d, balance LKR %d -> LKR %d",
+                FareTransaction.referenceFor(journeyId), amount, accountId, balanceBefore, balanceAfter);
         return transactions.insert(FareTransaction.forJourney(journeyId, accountId, amount, balanceAfter, at));
     }
 }

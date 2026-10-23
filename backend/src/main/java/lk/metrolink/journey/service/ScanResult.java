@@ -38,6 +38,19 @@ public final class ScanResult {
         return new Builder(outcome);
     }
 
+    /** The answer in one line for the console log: the outcome, then every figure that is set. */
+    public String summary() {
+        StringBuilder out = new StringBuilder(outcome.name());
+        if (reason != null) out.append(" (").append(reason.name()).append(")");
+        if (required != null) out.append(", needs LKR ").append(required);
+        if (fareDue != null) out.append(", fare due LKR ").append(fareDue);
+        if (fareCharged != null) out.append(", charged LKR ").append(fareCharged);
+        if (balance != null) out.append(", balance LKR ").append(balance);
+        if (shortfall != null) out.append(", short by LKR ").append(shortfall);
+        if (overtravelled) out.append(", went past the planned stop");
+        return out.toString();
+    }
+
     public ScanOutcome getOutcome() { return outcome; }
     /** Why the scan was refused, or why a fare is waiting. Null when there is nothing to explain. */
     public RejectionReason getReason() { return reason; }

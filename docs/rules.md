@@ -81,6 +81,22 @@ A customer books a ticket for a trip. This replaces the demo tickets as the way 
 | T11 | A quote checks the same rules as a booking and returns the fare, but creates nothing. | `BookingTest`, `ApiTest` |
 | T12 | A booked ticket works at the reader exactly like any other: it can be tapped in on its travel date and refused on any other day (B2). | `BookingTest`, `ApiTest` |
 
+## Console logs
+
+The server writes what it is doing to the console (section 11 of `docs/design.md`). "Proven in" names the test class.
+
+| ID | Rule | Proven in |
+| --- | --- | --- |
+| L1 | The log is off unless the application turns it on, so a test, or any code that uses the classes directly, prints nothing. With the level off, nothing is printed and nothing is formatted. | `LogTest`, `ConsoleTraceTest` |
+| L2 | `METROLINK_LOG` chooses the level: `off`, `warn`, `info` or `debug`, in any case. The default is `info`. Any other value stops start-up and says which values are allowed. A level shows its own lines and those of the levels before it. | `AppSettingsTest`, `LogTest`, `ConsoleTraceTest` |
+| L3 | A line is `time level request topic message`, on one line of plain printable ASCII, with the time in Colombo. A character that is not printable or not ASCII is replaced by `?`, so a request cannot forge a line, and a line is cut at 400 characters. The request is the number of the HTTP request that caused the line, or `-` when none did. | `LogTest`, `ConsoleTraceTest`, `WebLogTest` |
+| L4 | The log never shows a password, a password hash, a request body or a whole email address. An email that a repository call carries is masked (`a***@example.com`), and a hash is shown as `a password hash (hidden)`. QR codes and ids are shown. | `ConsoleTraceTest`, `RepositoryTraceTest`, `WebLogTest` |
+| L5 | A read, a fare quote and the browser's permission check are routine: their lines show only at `debug`. A request that changes something shows at `info`. A warning always shows. | `WebLogTest` |
+| L6 | Every change of state names the old state, the new state and the State class that allowed it. A change that is not allowed, a failed login and an unexpected error are warnings (`WARN`). A refused scan, a validation error and a refused booking are not. | `StateLogTest`, `ConsoleTraceTest`, `WebLogTest` |
+| L7 | A unit of work shows where it begins, and whether it commits or rolls back, and why. One inside another shows only at `debug`. A unit that only reads shows begin and commit only at `debug`. | `LoggedUnitOfWorkTest`, `ConsoleTraceTest` |
+| L8 | Logging never changes what the program does: the same requests give the same answers with the log off and at `debug`; an exception goes through the logging unchanged; a message that cannot be formatted becomes a note and never fails the request; a failure inside the program is a warning and still answers HTTP 500. | `ConsoleTraceTest`, `LoggedUnitOfWorkTest`, `RepositoryTraceTest`, `LogTest`, `WebLogTest` |
+| L9 | At `debug`, every repository call shows its arguments and what it returned. Below `debug`, none does. | `RepositoryTraceTest`, `ConsoleTraceTest` |
+
 ## Worked numbers (for the first tests)
 
 Route R100 charges 20 + 4.5 per km from 1 July 2026, and 20 + 4.0 per km before that. Route R200 is a flat LKR 30.

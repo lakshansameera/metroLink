@@ -3,6 +3,7 @@ package lk.metrolink.journey.service;
 import java.time.Instant;
 import lk.metrolink.journey.domain.Dates;
 import lk.metrolink.journey.domain.NotFoundException;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.RouteRepository;
 import lk.metrolink.journey.repository.UnitOfWork;
 import lk.metrolink.journey.service.ReaderDisplay.FareFigures;
@@ -29,6 +30,8 @@ public final class ReaderService {
 
     public ReaderDisplay scan(ScanRequest request) {
         return uow.run(() -> {
+            Log.info(Log.SERVICE, "ReaderService.scan (the Facade): %s tap for ticket %s at stop %s, handed to JourneyService",
+                    request.getDirection(), request.getQrCode(), request.getStopId());
             // A stop the network has never heard of is a wrong request, not a rejected passenger.
             routes.findStop(request.getStopId())
                     .orElseThrow(() -> new NotFoundException("Stop " + request.getStopId()));
@@ -52,10 +55,13 @@ public final class ReaderService {
 
     private ReaderDisplay display(ScanResult r) {
         Tone tone = toneOf(r);
+        String message = messageOf(r);
+        Log.info(Log.SERVICE, "ReaderService.display: %s -> tone %s, the reader shows \"%s\"", r.getOutcome(), tone,
+                message);
         return new ReaderDisplay(
                 r.getOutcome(),
                 tone,
-                messageOf(r),
+                message,
                 r.getReason(),
                 r.getTicket() == null ? null : queries.ticketView(r.getTicket()),
                 r.getJourney() == null ? null : queries.journeyView(r.getJourney()),

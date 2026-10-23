@@ -3,6 +3,7 @@ package lk.metrolink.journey.service;
 import java.time.Instant;
 import lk.metrolink.journey.domain.Account;
 import lk.metrolink.journey.domain.Dates;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.UnitOfWork;
 import lk.metrolink.journey.service.view.PassengerView;
@@ -35,8 +36,12 @@ public final class TestDataService {
     public PassengerView credit(long passengerId, long amount, Instant at) {
         return uow.run(() -> {
             Account account = accountService.requireForPassenger(passengerId);
+            long balanceBefore = account.getBalance();
             account.credit(amount, at);
             accounts.save(account);
+            Log.info(Log.ACCOUNT, "TestDataService.credit: LKR %d added to account #%d, balance LKR %d -> LKR %d"
+                    + " (stands in for Top Up Credit)", amount, account.getAccountId(), balanceBefore,
+                    account.getBalance());
             return queries.passenger(passengerId);
         });
     }

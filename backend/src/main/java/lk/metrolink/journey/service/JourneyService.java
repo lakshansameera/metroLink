@@ -13,6 +13,7 @@ import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.fare.FareCalculator;
 import lk.metrolink.journey.fare.FareQuote;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.FareRuleRepository;
 import lk.metrolink.journey.repository.JourneyRepository;
 import lk.metrolink.journey.repository.RouteRepository;
@@ -62,7 +63,13 @@ public final class JourneyService {
     // ------------------------------------------------------------------ boarding
 
     public ScanResult board(Scan scan) {
-        return uow.run(() -> boardInUnit(scan));
+        return uow.run(() -> {
+            Log.info(Log.SERVICE, "JourneyService.board: ticket %s tapped in at stop %s", scan.getQrCode(),
+                    scan.getStopId());
+            ScanResult result = boardInUnit(scan);
+            Log.info(Log.SERVICE, "JourneyService.board: %s", result.summary());
+            return result;
+        });
     }
 
     private ScanResult boardInUnit(Scan scan) {
@@ -121,7 +128,13 @@ public final class JourneyService {
     // ------------------------------------------------------------------ exit
 
     public ScanResult alight(Scan scan) {
-        return uow.run(() -> alightInUnit(scan));
+        return uow.run(() -> {
+            Log.info(Log.SERVICE, "JourneyService.alight: ticket %s tapped out at stop %s", scan.getQrCode(),
+                    scan.getStopId());
+            ScanResult result = alightInUnit(scan);
+            Log.info(Log.SERVICE, "JourneyService.alight: %s", result.summary());
+            return result;
+        });
     }
 
     private ScanResult alightInUnit(Scan scan) {
@@ -177,6 +190,7 @@ public final class JourneyService {
     /** Tries to pay a PAYMENT_PENDING journey, for example after the passenger topped up (rule D1). */
     public ScanResult settle(long journeyId, Instant at) {
         return uow.run(() -> {
+            Log.info(Log.SERVICE, "JourneyService.settle: retry the unpaid fare of journey #%d", journeyId);
             Journey journey = journeys.findById(journeyId)
                     .orElseThrow(() -> new NotFoundException("Journey " + journeyId));
             QRTicket ticket = tickets.findById(journey.getTicketId())
@@ -188,7 +202,9 @@ public final class JourneyService {
                 throw new DomainException("Journey " + journeyId + " has not ended yet; scan out before settling",
                         "ILLEGAL_TRANSITION", 409);
             }
-            return attemptSettlement(journey, ticket, at, false);
+            ScanResult result = attemptSettlement(journey, ticket, at, false);
+            Log.info(Log.SERVICE, "JourneyService.settle: %s", result.summary());
+            return result;
         });
     }
 
@@ -200,6 +216,9 @@ public final class JourneyService {
         long fareDue = journey.getFareDue();
         Account account = accountService.requireForPassenger(ticket.getPassengerId());
         Optional<FareTransaction> alreadyDebited = accountService.findFareTransaction(journey.getJourneyId());
+        Log.info(Log.SERVICE, "JourneyService.attemptSettlement: journey #%d owes LKR %d; a debit %s",
+                journey.getJourneyId(), fareDue,
+                alreadyDebited.isPresent() ? "already exists (it will not be charged again)" : "does not exist yet");
 
         if (alreadyDebited.isPresent() || account.canPay(fareDue, at)) {                  // X5, A4
             FareTransaction debit = accountService.debitFare(account.getAccountId(), journey.getJourneyId(), fareDue, at);
@@ -217,6 +236,7 @@ public final class JourneyService {
                     .build();
         }
 
+        Log.info(Log.SERVICE, "JourneyService.attemptSettlement: the account cannot pay, so no money moves");
         if (journey.isOpen()) {                                                           // X6
             journey.markPaymentPending();
             journeys.save(journey);

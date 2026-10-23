@@ -2,7 +2,7 @@
 
 Alerts are not part of this function (they belong to Monitor Credit Alerts). Going past the planned stop is only a flag on the result.
 
-Sections 1 to 7 describe Journey Execution. Section 8 describes Customer onboarding, which was added later and reuses the same layers. Section 9 describes the SQL database, which replaced memory as the default home of the data without changing a service.
+Sections 1 to 7 describe Journey Execution. Section 8 describes Customer onboarding, which was added later and reuses the same layers. Section 9 describes the SQL database, which replaced memory as the default home of the data without changing a service. Section 10 describes ticket booking. Section 11 describes the console log, which watches all of them without changing any.
 
 ## 1. Domain model
 
@@ -150,6 +150,8 @@ The payoff: when a fare is wrong, I look in `fare`, never in the browser.
 | **Abstract Factory** | `Store` with `InMemoryStore` and `JdbcStore` | One object hands out a matching set (the unit of work and every repository), so a repository can never be paired with a unit of work from another store. | 9 |
 | **Simple factory** | `OnboardingRequest.residency()` | The request turns "RESIDENT" or "NON_RESIDENT" plus a date into the right `Residency` object once, so no caller writes `if (resident)`. | 8 |
 | **Facade** | `OnboardingService` (the "AuthSystem" in the sequence diagram) | The web layer calls `register` and `login` and knows nothing about hashing, ids or accounts. | 8 |
+| **Decorator** | `LoggedUnitOfWork` over the store's `UnitOfWork` | Same interface, so no service can tell. It adds a line at begin, commit and rollback, and changes nothing else. | 11 |
+| **Proxy** | `RepositoryTrace.wrap(...)`, a JDK dynamic proxy over each repository interface | One class traces all eight repositories with no hand-written copy of any of them. It stands in for the real repository, writes a line after each call and passes the call on. | 11 |
 | **Immutable value object** | `PasswordHash`, `OnboardingRequest` | A hash cannot be changed after it is made; a request is checked, never edited. | 8 |
 
 State and Strategy look the same in UML (an interface plus implementations) but differ in intent. In Strategy the caller picks the algorithm and it does not change. In State the object changes its own behaviour as events happen, and each state decides the next one.
@@ -328,3 +330,57 @@ Until now tickets existed only as demo data. A customer can now book one. Nothin
 - **No timetable or capacity.** Any day in the window is accepted, and a ticket does not reserve a seat.
 - **A booked ticket does not expire by itself.** After its day, the reader refuses it for being for the wrong day (B2), but its status stays `ACTIVE` until some other process marks it `EXPIRED`.
 - **The 30-day window is a constant** (`BookingRequest.MAX_DAYS_AHEAD`), not a setting.
+
+## 11. Console logs
+
+The program can now say what it is doing: which state a ticket or journey moved to and which State class allowed it, which fare strategy priced a trip, which factory built an account, where a unit of work began and ended. The rules are L1 to L9 in `docs/rules.md`. The README shows the output and how to choose a level.
+
+### How a line gets to the console
+
+```
+domain / fare / service / web code ──► Log.info(topic, "...")  ──► one line on System.out
+                                          │
+                                          ├─ off unless App turned it on (L1)
+                                          ├─ level check first, so a hidden line costs nothing (L2)
+                                          └─ cleaned to one line of ASCII, cut if long (L3)
+```
+
+`Log` is a small static class: a level, a topic for each line, and the number of the current HTTP request kept in a `ThreadLocal`. `ApiServer` sets the number when a request arrives and clears it when it ends, so every line written in between carries it, in any class, without passing it along. `App` turns the log on from `METROLINK_LOG` before the store opens, so even the start-up lines are shown.
+
+### Which class does what
+
+| Class | Job |
+|---|---|
+| `Log` | The facade the rest of the code writes to: `warn`, `info`, `debug`, plus `configure` and `beginRequest`. No other class prints to the console. |
+| `Log.Level` | `OFF`, `WARN`, `INFO`, `DEBUG`, and `parse` for the setting. |
+| `LoggedUnitOfWork` | A Decorator. It wraps the store's unit of work, counts how deep this thread is (so it can tell the outermost unit, which is the real transaction, from one that joined it), and logs begin, commit or rollback. It rethrows the same exception. `readOnly(...)` makes one whose begin and commit show only at `debug`; the query service uses it. |
+| `RepositoryTrace` | A Proxy. `wrap(Class, target)` returns an object of the same interface that forwards every call, and at `debug` logs the call, its arguments and what came back (`found ticket #1 MLK-HAPPY01 ACTIVE`, `3 rows`, `nothing found`, `done`, `failed: ...`). It hides password hashes, masks emails, and unwraps the reflection exception so the caller sees the original. |
+| `Container` | The only place that knows the log exists: it wraps the unit of work and the repositories once. No service and no store has a logging line for the database. |
+
+The lines about states, strategies and factories are written by the classes that own them (`Journey`, `QRTicket`, `JourneyState`, `DistanceFareStrategy`, `Resident`, ...), because they are the ones that know the old state, the new state and why. Services write one line for each decision.
+
+### Decisions
+
+1. **No logging library.** The project has no dependency it does not need, and a student can read the whole of `Log` in one sitting. A library would add a configuration file and a jar for a few hundred lines of use. If the project grows, the call sites (`Log.info(topic, format, args)`) look the same as SLF4J's, so switching would change `Log` only.
+2. **Off by default in the code, `info` by default in the application.** Tests and anyone using the classes directly get silence (L1). `App` sets `info`, because the point of running the server is to watch it.
+3. **The log watches from outside where it can.** The database is traced by wrapping (Decorator and Proxy) instead of by putting a line into each of two stores and eight repositories. The state, strategy and factory lines have to be in their own classes, because only those classes know what happened.
+4. **A hidden line costs nothing.** `Log.info(...)` checks the level before it formats, so an expensive argument is not built for a line nobody sees. `Log.enabled(level)` lets a caller skip work that only a log line needs.
+5. **Routine requests are quiet at `info`.** The screen reads its lists and asks for a fare quote as the customer chooses stops, so these would bury the taps and bookings that change something (L5). They show at `debug`. A warning always shows, whatever the request.
+6. **What is a warning.** Only what a person should notice: a state change that is not allowed (a bug or a replay), a failed login, and an unexpected error. A ticket refused at the gate, a validation error and a rolled-back booking are normal answers and stay at `info` (decision 6, rejections are answers).
+7. **Privacy is by construction.** No caller passes a password or a body. The one place that could leak by accident, the repository trace (it prints its arguments), hides `PasswordHash`, masks emails, and prints only the class name of any type it does not know (L4). Tests search the whole output of registration, login and failed login for the password, the hash and the email.
+8. **Logging cannot break a request.** A format error becomes a note. The unit of work and the repository proxy rethrow the original exception, so `ConstraintViolationException` still becomes a 409. `ApiServer` writes the `->` status line before it sends the answer, so by the time a caller has the answer, every line of that request is already written, which is what lets the tests read the log without sleeping.
+9. **A line cannot be forged.** Control characters, line breaks and non-ASCII are replaced by `?`. A QR code text sent with a line break in it (`BAD\nLINE`) shows as `BAD?LINE` and not as a second, fake line (L3).
+10. **ASCII only, with `->` for arrows.** The Windows console does not always show Unicode, and one stray character can garble a line.
+
+### How it is tested
+
+`LogTest` proves the levels, the line layout, the Colombo time, column alignment, request numbers, routine requests, that nothing is formatted when a line is hidden, a bad format, forged and non-ASCII text, the cut, and 16 threads writing 200 lines each without one being torn. `LoggedUnitOfWorkTest` and `RepositoryTraceTest` (on both stores) prove begin, commit, rollback, nesting, that exceptions pass through as the same object, and what the proxy shows and hides. `StateLogTest` proves every state change and every refused one. `ConsoleTraceTest` runs whole scenarios (tap in, tap out, used, expired and cancelled tickets, too little credit, a fare that cannot be paid, a flat fare, registering a resident and a non-resident, a failed login, booking, a taken QR code) through the real wiring on both stores and checks the lines in order, that nothing private appears, and that the answers are the same with the log off and at `debug`. `WebLogTest` proves request numbers over real HTTP, 24 overlapping requests, that reads and quotes are hidden at `info`, the status line with its error code, and a failing store giving a warning and a clean 500. `AppSettingsTest` proves the setting. The logging code was broken on purpose 47 ways (a state line dropped, a warning made an info, the level comparison reversed, a password added to a line, the email mask removed, a rolled-back unit not announced, a repository left untraced, the cut of a long line removed, and so on). 46 made at least one test fail. The 47th removes the call that ends a request's number on a server thread; nothing observable changes, because every request sets its own number when it begins, so it is cleanup only.
+
+### Not built
+
+- **No log file and no rotation.** Output goes to the console. Redirect it to keep it.
+- **No level for one class.** The level is for the whole program.
+- **No structured (JSON) output.** A line is for a person to read.
+- **No tracing across threads beyond the request number.** The unit of work depth and the request are per thread, which is right for a server that handles one request on one thread.
+- **The request number restarts at 1 each time the server starts**, so it identifies a request only within one run.
+- **The time is Colombo time**, as everywhere (D6), not the machine's.

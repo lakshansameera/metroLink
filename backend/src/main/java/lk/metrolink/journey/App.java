@@ -3,6 +3,7 @@ package lk.metrolink.journey;
 import java.io.IOException;
 import java.time.LocalDate;
 import lk.metrolink.journey.domain.Dates;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.DataAccessException;
 import lk.metrolink.journey.repository.Store;
 import lk.metrolink.journey.repository.jdbc.JdbcStore;
@@ -18,6 +19,8 @@ import lk.metrolink.journey.web.ApiServer;
  *       forget it on exit. Default: an H2 database file at {@code ./data/metrolink} (see {@link #DEFAULT_DB}).</li>
  *   <li>{@code METROLINK_DB_USER} and {@code METROLINK_DB_PASSWORD}: the database login. Default {@code sa} and an
  *       empty password, which is what a new H2 file database starts with.</li>
+ *   <li>{@code METROLINK_LOG}: how much the console shows: {@code off}, {@code warn}, {@code info} or {@code debug}.
+ *       Default {@code info}. See {@link Log}.</li>
  * </ul>
  */
 public final class App {
@@ -35,6 +38,9 @@ public final class App {
      */
     static final String DEFAULT_DB = "jdbc:h2:file:./data/metrolink;AUTO_SERVER=TRUE;WRITE_DELAY=0";
 
+    /** How much the console shows unless {@code METROLINK_LOG} says otherwise. */
+    static final String DEFAULT_LOG = "info";
+
     private App() {
     }
 
@@ -49,6 +55,15 @@ public final class App {
                 System.exit(2);
             }
         }
+
+        Log.Level logLevel = null;
+        try {
+            logLevel = logLevel(setting("METROLINK_LOG", DEFAULT_LOG));
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            System.exit(2);
+        }
+        Log.configure(logLevel, System.out);
 
         LocalDate today = Dates.today();
         String database = setting("METROLINK_DB", DEFAULT_DB);
@@ -69,6 +84,14 @@ public final class App {
         }, "shutdown"));
         System.out.println("MetroLink API listening on http://localhost:" + server.port() + "/api");
         System.out.println("Data: " + (isMemory(database) ? "in memory (forgotten on exit)" : database));
+        System.out.println("Log: " + logLevel.name().toLowerCase(java.util.Locale.ROOT)
+                + " (set METROLINK_LOG to off, warn, info or debug to change it)");
+    }
+
+    /** The level named by {@code METROLINK_LOG}. Anything but off, warn, info or debug is a mistake worth stopping for. */
+    static Log.Level logLevel(String text) {
+        return Log.Level.parse(text).orElseThrow(() -> new IllegalArgumentException(
+                "METROLINK_LOG must be off, warn, info or debug, but it was \"" + text + "\""));
     }
 
     private static Store openStore(String database, LocalDate today) {

@@ -1,5 +1,7 @@
 package lk.metrolink.journey.domain;
 
+import lk.metrolink.journey.log.Log;
+
 public interface JourneyState {
     String name();
 
@@ -18,6 +20,8 @@ public interface JourneyState {
     }
 
     private DomainException illegal(long journeyId, String action) {
+        Log.warn(Log.STATE, "Journey #%d is %s: %s has no way to %s, so the change is refused",
+                journeyId, name(), getClass().getSimpleName(), action);
         return new DomainException("Journey " + journeyId + " is " + name() + "; cannot " + action,
                 "ILLEGAL_TRANSITION", 409);
     }

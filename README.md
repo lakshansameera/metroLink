@@ -126,6 +126,60 @@ METROLINK_DB=memory java -jar target/metrolink-journey-execution.jar            
 
 The tests run every store-dependent test twice, once on the in-memory store and once on H2, so both behave the same way.
 
+## Console logs
+
+The server writes what it is doing to the console, so you can watch the states change and see which class does what. It uses no logging library. Start it and tap a ticket in the Reader, and the console shows this (a real run, shortened):
+
+```
+22:57:46.305 INFO  #6    WEB      POST /api/reader/scan
+22:57:46.311 INFO  #6    UOW      begin: one unit of work, so every change below is kept together or not at all
+22:57:46.312 INFO  #6    SERVICE  ReaderService.scan (the Facade): IN tap for ticket MLK-HAPPY01 at stop S1, handed to JourneyService
+22:57:46.315 INFO  #6    STATE    Ticket #1 MLK-HAPPY01 is ACTIVE: ActiveState.refusalReason(travel date 2026-10-23, today 2026-10-23) -> usable
+22:57:46.324 INFO  #6    STRATEGY FareCalculator: route R100 S1 to S5 is 10.8 km; fare rule #2 in force on 2026-10-23 is DISTANCE -> DistanceFareStrategy
+22:57:46.326 INFO  #6    STRATEGY DistanceFareStrategy: base LKR 20 + LKR 4.5 per km x 10.8 km = LKR 68.60, rounded up to LKR 69
+22:57:46.328 INFO  #6    ACCOUNT  Account #1 (PermanentAccount): isUsableAt -> true, balance LKR 500 against LKR 69 -> can pay
+22:57:46.330 INFO  #6    FACTORY  Journey.start: new journey for ticket #1 at stop S1, starts in the IN_PROGRESS state
+22:57:46.336 INFO  #6    UOW      commit: changes kept (24 ms)
+22:57:46.337 INFO  #6    WEB      -> 200 in 32 ms
+```
+
+Tap out, and you see `STATE  Journey #1: IN_PROGRESS -> COMPLETED (InProgressState.complete: LKR 69 charged)` and `STATE  Ticket #1 MLK-HAPPY01: ACTIVE -> USED (ActiveState.markUsed)`. A line is `time level request topic message`. The request is the number of the HTTP request that caused the line, so lines of taps that overlap can be told apart. It is `-` for lines written outside a request, such as start-up.
+
+| Topic | What it shows | Pattern |
+|---|---|---|
+| `STATE` | A ticket or a journey moving from one state to the next, with the State class that allowed it. A move that is not allowed is a `WARN`. | State |
+| `STRATEGY` | Which fare strategy priced the trip, and the sum it did | Strategy |
+| `FACTORY` | How an account (permanent or temporary), a ticket or a journey comes to exist | Factory |
+| `UOW` | Where a unit of work begins and whether it commits or rolls back | Unit of Work (a Decorator) |
+| `SERVICE` | What each service decided | Facade |
+| `ACCOUNT` | Whether the account can pay, and money moving in or out | |
+| `WEB` | Each request, its status and how long it took | |
+| `REPO` | Every repository call and what it returned (debug only) | Proxy |
+| `APP` | Start-up | |
+
+**Choose how much is shown** with `METROLINK_LOG`. The default is `info`.
+
+| Value | Shows |
+|---|---|
+| `off` | Nothing |
+| `warn` | Only what should be noticed: a state change that is not allowed, a failed login, an unexpected error (HTTP 500) |
+| `info` | The behaviour of the classes, as above, for every request that changes something. This is the default. |
+| `debug` | Everything in `info`, plus reads, fare quotes, every repository call and each nested unit of work |
+
+```
+$env:METROLINK_LOG = "debug"; java -jar target/metrolink-journey-execution.jar        # PowerShell
+METROLINK_LOG=debug java -jar target/metrolink-journey-execution.jar                   # bash
+```
+
+Any other value stops the server at start-up and says which values are allowed. The screen reloads its lists all the time, so reads, and the fare quote shown while a customer chooses stops, appear only at `debug`; at `info` the console shows only the requests that change something.
+
+- **Nothing private is printed.** No password, no password hash, no request body, and no whole email address (an email in a repository call shows as `a***@example.com`). QR codes and ids are printed, because they are what you follow.
+- **One line, plain ASCII.** Anything a client sent, such as a QR code with a line break in it, is cleaned before it is printed, so a request cannot forge a log line. A very long line is cut.
+- **Logging never changes what the program does.** With the level `off` and with `debug` the same requests give the same answers, and a message that cannot be formatted is replaced by a note instead of failing the request. The tests do not print anything, because the log is off unless the application turns it on.
+- **Console only.** There is no log file. Redirect the output if you want one: `java -jar ... > metrolink.log`.
+
+The rules are L1 to L9 in `docs/rules.md`. Section 11 of `docs/design.md` explains the design.
+
 ## API
 
 Customer onboarding has two endpoints:
@@ -160,5 +214,6 @@ backend/src/main/java/lk/metrolink/journey
   service/       JourneyService (the workflow), ReaderService (the front door), QueryService,
                  OnboardingService (register and log in), BookingService (quote and book), QrCodes
   web/           HTTP server, routes, validation
+  log/           the console log: Log, LoggedUnitOfWork (Decorator), RepositoryTrace (Proxy)
   Container.java wires everything together
 ```

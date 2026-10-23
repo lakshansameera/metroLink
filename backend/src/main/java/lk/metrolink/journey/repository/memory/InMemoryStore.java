@@ -1,6 +1,7 @@
 package lk.metrolink.journey.repository.memory;
 
 import java.time.LocalDate;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.CredentialRepository;
 import lk.metrolink.journey.repository.FareRuleRepository;
@@ -38,6 +39,7 @@ public final class InMemoryStore implements Store {
 
     /** A store loaded with the network and demo data, with demo tickets for {@code today}. */
     public static InMemoryStore seeded(LocalDate today) {
+        Log.info(Log.APP, "InMemoryStore.seeded: demo data loaded in memory, forgotten when the program stops");
         return new InMemoryStore(InMemoryDatabase.seeded(today));
     }
 

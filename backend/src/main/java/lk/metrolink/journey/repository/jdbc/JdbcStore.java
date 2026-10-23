@@ -18,6 +18,7 @@ import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.domain.RouteStop;
 import lk.metrolink.journey.domain.Stop;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.CredentialRepository;
 import lk.metrolink.journey.repository.DataAccessException;
@@ -78,7 +79,10 @@ public final class JdbcStore implements Store {
             JdbcStore store = new JdbcStore(database);
             store.createTables();
             if (store.isEmpty()) {
+                Log.info(Log.APP, "JdbcStore.open: the database is empty, so the demo data is loaded");
                 store.reset(today);
+            } else {
+                Log.info(Log.APP, "JdbcStore.open: the database already has data, so it is left exactly as it is");
             }
             return store;
         } catch (RuntimeException | Error e) {

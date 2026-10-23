@@ -6,6 +6,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lk.metrolink.journey.domain.Account;
 import lk.metrolink.journey.domain.BookingRequest;
 import lk.metrolink.journey.domain.Dates;
@@ -15,6 +16,7 @@ import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.fare.FareCalculator;
 import lk.metrolink.journey.fare.FareQuote;
+import lk.metrolink.journey.log.Log;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.FareRuleRepository;
 import lk.metrolink.journey.repository.RouteRepository;
@@ -66,7 +68,15 @@ public final class BookingService {
 
     /** {@code at} is the moment of asking; its Colombo date is "today" for the checks. */
     public TicketQuote quote(BookingRequest request, Instant at) {
-        return uow.run(() -> checked(request, at).quote);
+        return uow.run(() -> {
+            Log.info(Log.SERVICE, "BookingService.quote: passenger #%d, route %s %s to %s on %s (nothing is created)",
+                    request.getPassengerId(), request.getRouteNo(), request.getBoardingStopId(),
+                    request.getDestinationStopId(), request.getTravelDate());
+            TicketQuote quote = checked(request, at).quote;
+            Log.info(Log.SERVICE, "BookingService.quote: fare LKR %d, balance LKR %d, can pay now: %b", quote.getFare(),
+                    quote.getBalance(), quote.isCanPayNow());
+            return quote;
+        });
     }
 
     public BookingResult book(BookingRequest request) {
@@ -75,11 +85,16 @@ public final class BookingService {
 
     public BookingResult book(BookingRequest request, Instant at) {
         return uow.run(() -> {
+            Log.info(Log.SERVICE, "BookingService.book: passenger #%d, route %s %s to %s on %s", request.getPassengerId(),
+                    request.getRouteNo(), request.getBoardingStopId(), request.getDestinationStopId(),
+                    request.getTravelDate());
             Checked checked = checked(request, at);                                              // T1 to T6
             QRTicket ticket = tickets.insert(QRTicket.issue(freshQrCode(), request.getPassengerId(),     // T7, T8, T9
                     request.getRouteNo(), request.getBoardingStopId(), request.getDestinationStopId(),
                     request.getTravelDate(), checked.quote.getFare(), at));
             TicketView view = queries.ticketView(ticket);
+            Log.info(Log.SERVICE, "BookingService.book: ticket #%d %s stored as %s. No money moves; the fare of LKR %d is"
+                    + " charged at the exit", view.getTicketId(), view.getQrCode(), view.getStatus(), view.getQuotedFare());
             return new BookingResult(view, message(view, checked.quote), checked.quote.getBalance(),
                     checked.quote.isCanPayNow());                                                       // T10
         });
@@ -95,6 +110,8 @@ public final class BookingService {
 
         List<BookingRequest.Problem> problems = request.problems(route, account, Dates.localDate(at));    // T1 to T4
         if (!problems.isEmpty()) {
+            Log.info(Log.SERVICE, "BookingRequest.problems: refused, %d wrong field(s): %s", problems.size(),
+                    problems.stream().map(BookingRequest.Problem::getField).collect(Collectors.joining(", ")));
             throw new InvalidBookingException(problems);
         }
 
@@ -112,6 +129,8 @@ public final class BookingService {
             if (tickets.findByQrCode(code).isEmpty()) {
                 return code;
             }
+            Log.info(Log.SERVICE, "BookingService: QR code %s is already taken, drawing another (try %d of %d)", code,
+                    attempt + 1, QR_ATTEMPTS);
         }
         throw new IllegalStateException("Could not find an unused QR code after " + QR_ATTEMPTS + " tries");
     }

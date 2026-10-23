@@ -26,6 +26,13 @@ mvn package                    # builds target/metrolink-journey-execution.jar
 java -jar target/metrolink-journey-execution.jar
 ```
 
+If `java -jar` says `UnsupportedClassVersionError ... class file version 61.0 ... only recognizes class file versions up to 55.0`, the `java` on your path is older than 17 (55 is Java 11), even though Maven built the jar with a newer one. Check with `java -version` and `mvn -version` (Maven prints the Java it uses). Start the jar with the Java that Maven uses:
+
+```
+& "$env:JAVA_HOME\bin\java.exe" -jar target/metrolink-journey-execution.jar          # PowerShell
+"$JAVA_HOME/bin/java" -jar target/metrolink-journey-execution.jar                       # bash
+```
+
 It listens on port 4000. Set `PORT` to use another. Data is kept in a database file, so it is still there after a restart (see "Database" below). Nothing needs installing: the database runs inside the server.
 
 Frontend (needs Node 22 or later), in a second terminal:

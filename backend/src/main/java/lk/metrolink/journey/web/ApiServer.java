@@ -82,6 +82,9 @@ public final class ApiServer {
             exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
 
             if (method.equals("OPTIONS")) {
+                // The answer has no body at all. The JDK server can drop the connection when the caller sends its next
+                // request on it at once, so the caller is asked to use a new connection for that one.
+                exchange.getResponseHeaders().set("Connection", "close");
                 finished(204, null, started);
                 exchange.sendResponseHeaders(204, -1);
                 return;

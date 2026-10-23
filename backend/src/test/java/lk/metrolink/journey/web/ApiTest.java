@@ -278,6 +278,18 @@ public class ApiTest extends OnEveryStore {
         assertEquals("*", response.headers().firstValue("Access-Control-Allow-Origin").orElse(""));
     }
 
+    @Test
+    public void thePermissionCheckAsksTheCallerToUseANewConnectionForItsNextRequest() throws Exception {
+        // The JDK server sometimes dropped a connection that was reused at once after a 204 answer, so the caller
+        // that sent this one is asked not to reuse it. Without this, two checks in a row failed now and then.
+        HttpRequest preflight = HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + "/api/reader/scan"))
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody()).build();
+
+        HttpResponse<String> response = client.send(preflight, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals("close", response.headers().firstValue("Connection").orElse(""));
+    }
+
     // ---- customer onboarding: register and log in (O1 to O9)
 
     private static final String PASSWORD = "Sunny day 42";

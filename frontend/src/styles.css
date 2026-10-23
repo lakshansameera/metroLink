@@ -584,20 +584,16 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     'register'
-    'welcome'
-    'everyone';
+    'welcome';
 }
 
 .area-register { grid-area: register; }
 .area-welcome { grid-area: welcome; display: grid; gap: 1rem; align-content: start; }
-.area-everyone { grid-area: everyone; }
 
 @media (min-width: 60rem) {
   .signup {
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    grid-template-areas:
-      'register welcome'
-      'everyone everyone';
+    grid-template-areas: 'register welcome';
     align-items: start;
   }
 }
@@ -756,21 +752,4 @@ button:disabled {
 
 .login .hint {
   margin-top: 0.75rem;
-}
-
-.just-joined {
-  background: var(--line-tint);
-  box-shadow: -4px 0 0 var(--go);
-  padding-left: 0.5rem;
-}
-
-.new-badge {
-  margin-left: 0.5rem;
-  padding: 0.05rem 0.45rem;
-  background: var(--go);
-  color: #fff;
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  vertical-align: 0.1em;
 }

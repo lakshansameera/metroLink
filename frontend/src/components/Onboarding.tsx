@@ -1,18 +1,25 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
 import { dayOf, lkr, todayInColombo } from '../format';
-import type { AuthResult, Passenger, Residency } from '../types';
-import { PassengerList } from './PassengerList';
+import type { AuthResult, Residency } from '../types';
 
 interface Props {
-  passengers: Passenger[];
-  /** Reload the lists after a customer joins, so the new person shows up at once. */
+  /** Reload the lists after a customer joins, so the Reader screen shows the new person at once. */
   onChanged: () => Promise<void>;
-  onTopUp: (passengerId: number, amount: number) => void;
-  busy: boolean;
 }
 
 type Errors = Record<string, string>;
+
+/**
+ * A 404 means a server is answering but has no sign-up routes, so an older build is still running on the port.
+ * Saying so is kinder than the bare "Unknown endpoint".
+ */
+function explain(e: unknown): string {
+  if (e instanceof ApiError && e.status === 404) {
+    return 'The running server does not have sign-up yet, so it is an older build. Stop it, run mvn package in the backend folder, then start it again.';
+  }
+  return e instanceof ApiError ? e.message : 'Something went wrong.';
+}
 
 /** The first message for each field, so a field shows one clear sentence rather than a pile. */
 function byField(error: ApiError): Errors {
@@ -55,7 +62,7 @@ function Field({ id, label, hint, error, children }: FieldProps) {
  * Customer onboarding: register a new customer, or log in an existing one.
  * Every rule lives on the server. This screen only shows what the server says, field by field.
  */
-export function Onboarding({ passengers, onChanged, onTopUp, busy }: Props) {
+export function Onboarding({ onChanged }: Props) {
   const ids = useId();
   const id = (field: string) => `${ids}-${field}`;
 
@@ -79,7 +86,6 @@ export function Onboarding({ passengers, onChanged, onTopUp, busy }: Props) {
 
   // What happened last, shown on the big face on the right
   const [outcome, setOutcome] = useState<{ kind: 'registered' | 'loggedIn'; result: AuthResult } | null>(null);
-  const [justJoined, setJustJoined] = useState<number | null>(null);
 
   async function register(event: FormEvent) {
     event.preventDefault();
@@ -95,7 +101,6 @@ export function Onboarding({ passengers, onChanged, onTopUp, busy }: Props) {
         visaExpiry: residency === 'NON_RESIDENT' && visaExpiry ? visaExpiry : undefined,
       });
       setOutcome({ kind: 'registered', result });
-      setJustJoined(result.userId);
       setLoginEmail(result.customer.email);
       setLoginPassword('');
       setName('');
@@ -117,7 +122,7 @@ export function Onboarding({ passengers, onChanged, onTopUp, busy }: Props) {
       } else if (e instanceof ApiError && e.code === 'EMAIL_TAKEN') {
         setErrors({ email: 'This email is already registered. Log in instead, or use a different email.' });
       } else {
-        setFormError(e instanceof ApiError ? e.message : 'Something went wrong.');
+        setFormError(explain(e));
       }
     } finally {
       setRegistering(false);
@@ -140,7 +145,7 @@ export function Onboarding({ passengers, onChanged, onTopUp, busy }: Props) {
       } else if (e instanceof ApiError && e.code === 'VALIDATION' && e.details.length > 0) {
         setLoginErrors(byField(e));
       } else {
-        setLoginError(e instanceof ApiError ? e.message : 'Something went wrong.');
+        setLoginError(explain(e));
       }
     } finally {
       setLoggingIn(false);
@@ -301,10 +306,6 @@ export function Onboarding({ passengers, onChanged, onTopUp, busy }: Props) {
             <p className="hint">The five demo customers log in with the password Demo@1234, for example nimal@example.com.</p>
           </form>
         </section>
-      </div>
-
-      <div className="area-everyone">
-        <PassengerList passengers={passengers} onTopUp={onTopUp} busy={busy} highlightId={justJoined} />
       </div>
     </main>
   );

@@ -173,7 +173,7 @@ This is the "New user - Registration" and "Existing user - Login" part of the To
 1. The request is checked by `OnboardingRequest.problems(today)`. Every wrong field is collected, and if there are any, nothing is created (rules O1, O3).
 2. The password is hashed with PBKDF2 (rule O6). This is slow on purpose, so it is done before the lock is taken and never holds up other requests.
 3. One unit of work (rule O5) checks the email is free (O2), inserts the passenger, inserts the password hash and inserts a permanent or temporary account with LKR 0 (O3, O4). If any step fails, all are undone, including the ids that were handed out.
-4. The answer is built from the same `QueryService` the passenger list uses, so the new customer is in the list at once (O9).
+4. The answer is built from the same `QueryService` the passenger list uses, so the new customer is in the list at once (O9). The screen reloads the lists after registering, so the Passengers list on the Reader tab shows the new customer. The New customer screen itself has no list.
 
 ### Data added
 

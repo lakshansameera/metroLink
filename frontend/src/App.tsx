@@ -132,7 +132,7 @@ export function App() {
       {!reference ? (
         <p className="loading">{error ? '' : 'Loading the network.'}</p>
       ) : view === 'onboarding' ? (
-        <Onboarding key={startOver} passengers={passengers} onChanged={refresh} onTopUp={topUp} busy={busy} />
+        <Onboarding key={startOver} onChanged={refresh} />
       ) : (
         <main className="shell">
           <div className="area-tickets">

@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import lk.metrolink.journey.Container;
+import lk.metrolink.journey.domain.Dates;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -274,5 +275,234 @@ public class ApiTest {
 
         assertEquals(204, response.statusCode());
         assertEquals("*", response.headers().firstValue("Access-Control-Allow-Origin").orElse(""));
+    }
+
+    // ---- customer onboarding: register and log in (O1 to O9)
+
+    private static final String PASSWORD = "Sunny day 42";
+
+    /** The service checks a visa date against the real clock, so these tests ask the same clock. */
+    private static String visaInDays(int days) {
+        return Dates.today().plusDays(days).toString();
+    }
+
+    private static String registration(String name, String email, String password, String residency, String visa) {
+        StringBuilder body = new StringBuilder("{");
+        body.append("\"name\":\"").append(name).append("\",");
+        body.append("\"email\":\"").append(email).append("\",");
+        body.append("\"password\":\"").append(password).append("\",");
+        body.append("\"residency\":\"").append(residency).append("\"");
+        if (visa != null) {
+            body.append(",\"visaExpiry\":\"").append(visa).append("\"");
+        }
+        return body.append("}").toString();
+    }
+
+    private Reply register(String email) throws Exception {
+        return post("/api/onboarding/register", registration("Amaya Jayasuriya", email, PASSWORD, "RESIDENT", null));
+    }
+
+    private Reply login(String email, String password) throws Exception {
+        return post("/api/onboarding/login", "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}");
+    }
+
+    private static List<String> paths(Reply reply) {
+        List<String> found = new ArrayList<>();
+        reply.json.get("details").forEach(d -> found.add(d.get("path").asText()));
+        return found;
+    }
+
+    @Test
+    public void registeringAResidentOpensAPermanentAccountWithNoCredit() throws Exception {
+        Reply reply = register("amaya@example.com");
+
+        assertEquals(201, reply.status);
+        assertEquals(6, reply.json.get("userId").asInt());
+        assertEquals("Amaya Jayasuriya", reply.json.get("customer").get("name").asText());
+        assertEquals("PERMANENT", reply.json.get("customer").get("accountType").asText());
+        assertEquals(0, reply.json.get("customer").get("balance").asInt());
+        assertTrue(reply.json.get("message").asText().startsWith("Welcome, Amaya Jayasuriya."));
+    }
+
+    @Test
+    public void registeringANonResidentOpensATemporaryAccountWithTheVisaDate() throws Exception {
+        String visa = visaInDays(30);
+
+        Reply reply = post("/api/onboarding/register",
+                registration("Emma Walker", "emma.w@example.com", PASSWORD, "NON_RESIDENT", visa));
+
+        assertEquals(201, reply.status);
+        assertEquals("TEMPORARY", reply.json.get("customer").get("accountType").asText());
+        assertEquals(visa, reply.json.get("customer").get("visaExpiry").asText());
+    }
+
+    @Test
+    public void aRegisteredCustomerIsInThePassengerListAndCanBeCredited() throws Exception {
+        register("amaya@example.com");
+
+        JsonNode list = get("/api/passengers").json;
+        assertEquals(6, list.size());
+        assertEquals("amaya@example.com", list.get(5).get("email").asText());
+
+        Reply credited = post("/api/test-data/credit", "{\"passengerId\":6,\"amount\":100}");
+        assertEquals(200, credited.status);
+        assertEquals(100, credited.json.get("balance").asInt());
+    }
+
+    @Test
+    public void noResponseEverContainsThePasswordOrItsHash() throws Exception {
+        Reply registered = register("amaya@example.com");
+        Reply loggedIn = login("amaya@example.com", PASSWORD);
+        Reply list = get("/api/passengers");
+
+        for (Reply reply : new Reply[] {registered, loggedIn, list}) {
+            String text = reply.json.toString().toLowerCase();
+            assertFalse(text, text.contains(PASSWORD.toLowerCase()));
+            assertFalse(text, text.contains("hash"));
+            assertFalse(text, text.contains("salt"));
+            assertFalse(text, text.contains("password"));
+        }
+    }
+
+    @Test
+    public void everyWrongFieldIsListedInOneAnswer() throws Exception {
+        Reply reply = post("/api/onboarding/register", registration("", "nope", "short", "RESIDENT", null));
+
+        assertEquals(400, reply.status);
+        assertEquals("VALIDATION", reply.json.get("error").asText());
+        assertEquals(List.of("name", "email", "password"), paths(reply));
+        assertEquals(5, get("/api/passengers").json.size());
+    }
+
+    @Test
+    public void anEmptyBodyListsWhatIsMissing() throws Exception {
+        Reply reply = post("/api/onboarding/register", "{}");
+
+        assertEquals(400, reply.status);
+        assertEquals(List.of("name", "email", "password", "residency"), paths(reply));
+    }
+
+    @Test
+    public void fieldsOfTheWrongTypeAreRefused() throws Exception {
+        Reply reply = post("/api/onboarding/register",
+                "{\"name\":5,\"email\":\"a@b.co\",\"password\":\"Sunny day 42\",\"residency\":\"RESIDENT\"}");
+
+        assertEquals(400, reply.status);
+        assertEquals(List.of("name"), paths(reply));
+    }
+
+    @Test
+    public void anUnknownResidencyIsRefused() throws Exception {
+        Reply reply = post("/api/onboarding/register",
+                registration("Amaya", "amaya@example.com", PASSWORD, "TOURIST", null));
+
+        assertEquals(400, reply.status);
+        assertEquals(List.of("residency"), paths(reply));
+    }
+
+    @Test
+    public void aVisaDateThatIsNotADateIsRefused() throws Exception {
+        Reply reply = post("/api/onboarding/register",
+                registration("Emma", "emma.w@example.com", PASSWORD, "NON_RESIDENT", "31/12/2030"));
+
+        assertEquals(400, reply.status);
+        assertEquals(List.of("visaExpiry"), paths(reply));
+    }
+
+    @Test
+    public void aNonResidentNeedsAVisaDateThatIsNotInThePast() throws Exception {
+        Reply missing = post("/api/onboarding/register",
+                registration("Emma", "emma.w@example.com", PASSWORD, "NON_RESIDENT", null));
+        Reply past = post("/api/onboarding/register",
+                registration("Emma", "emma.w@example.com", PASSWORD, "NON_RESIDENT", visaInDays(-1)));
+
+        assertEquals(400, missing.status);
+        assertEquals(List.of("visaExpiry"), paths(missing));
+        assertEquals(400, past.status);
+        assertEquals(List.of("visaExpiry"), paths(past));
+    }
+
+    @Test
+    public void aSecondRegistrationWithTheSameEmailIsRefused() throws Exception {
+        assertEquals(201, register("amaya@example.com").status);
+
+        Reply again = register("AMAYA@example.com");
+
+        assertEquals(409, again.status);
+        assertEquals("EMAIL_TAKEN", again.json.get("error").asText());
+        assertEquals(6, get("/api/passengers").json.size());
+    }
+
+    @Test
+    public void sixPeopleRegisteringTheSameEmailAtOnceOnlyOneSucceeds() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(6);
+        List<Future<Reply>> replies = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            replies.add(pool.submit(() -> register("race@example.com")));
+        }
+        int created = 0;
+        int refused = 0;
+        for (Future<Reply> future : replies) {
+            int status = future.get().status;
+            if (status == 201) created++;
+            if (status == 409) refused++;
+        }
+        pool.shutdown();
+
+        assertEquals(1, created);
+        assertEquals(5, refused);
+        assertEquals(6, get("/api/passengers").json.size());
+    }
+
+    @Test
+    public void aRegisteredCustomerCanLogIn() throws Exception {
+        int userId = register("amaya@example.com").json.get("userId").asInt();
+
+        Reply reply = login("amaya@example.com", PASSWORD);
+
+        assertEquals(200, reply.status);
+        assertEquals(userId, reply.json.get("userId").asInt());
+        assertEquals("Welcome back, Amaya Jayasuriya.", reply.json.get("message").asText());
+    }
+
+    @Test
+    public void aDemoCustomerCanLogInWithTheDemoPassword() throws Exception {
+        Reply reply = login("nimal@example.com", "Demo@1234");
+
+        assertEquals(200, reply.status);
+        assertEquals(1, reply.json.get("userId").asInt());
+        assertEquals("Nimal Perera", reply.json.get("customer").get("name").asText());
+    }
+
+    @Test
+    public void aWrongPasswordAndAnUnknownEmailGetTheSameAnswer() throws Exception {
+        register("amaya@example.com");
+
+        Reply wrongPassword = login("amaya@example.com", "Rainy day 42");
+        Reply unknownEmail = login("nobody@example.com", PASSWORD);
+
+        assertEquals(401, wrongPassword.status);
+        assertEquals(401, unknownEmail.status);
+        assertEquals("INVALID_LOGIN", wrongPassword.json.get("error").asText());
+        assertEquals(wrongPassword.json.toString(), unknownEmail.json.toString());
+    }
+
+    @Test
+    public void aLoginWithMissingFieldsIsAMalformedRequest() throws Exception {
+        Reply reply = post("/api/onboarding/login", "{}");
+
+        assertEquals(400, reply.status);
+        assertEquals(List.of("email", "password"), paths(reply));
+    }
+
+    @Test
+    public void resettingTheDemoDataForgetsRegisteredCustomers() throws Exception {
+        register("amaya@example.com");
+
+        post("/api/test-data/reset", null);
+
+        assertEquals(5, get("/api/passengers").json.size());
+        assertEquals(401, login("amaya@example.com", PASSWORD).status);
+        assertEquals(6, register("amaya@example.com").json.get("userId").asInt());
     }
 }

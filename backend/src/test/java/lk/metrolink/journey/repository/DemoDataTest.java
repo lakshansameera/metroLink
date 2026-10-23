@@ -8,10 +8,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import lk.metrolink.journey.domain.Account;
 import lk.metrolink.journey.domain.Dates;
+import lk.metrolink.journey.domain.Passenger;
+import lk.metrolink.journey.domain.PasswordHash;
 import lk.metrolink.journey.domain.QRTicket;
+import lk.metrolink.journey.domain.Resident;
 import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.fare.FareCalculator;
 import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
+import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
 import lk.metrolink.journey.repository.memory.InMemoryDatabase;
 import lk.metrolink.journey.repository.memory.InMemoryFareRuleRepository;
 import lk.metrolink.journey.repository.memory.InMemoryPassengerRepository;
@@ -113,5 +117,32 @@ public class DemoDataTest {
         InMemoryDatabase real = InMemoryDatabase.seeded(Dates.today());
 
         assertEquals(10, real.run(() -> new InMemoryTicketRepository(real).list().size()).intValue());
+    }
+
+
+    @Test
+    public void everyDemoPassengerHasAPasswordThatIsTheDemoPassword() {
+        CredentialRepository credentials = new InMemoryCredentialRepository(db);
+
+        db.execute(() -> {
+            for (Passenger passenger : passengers.list()) {
+                PasswordHash hash = credentials.findByPassenger(passenger.getPassengerId()).orElseThrow();
+                assertTrue(passenger.getEmail(), hash.matches("Demo@1234"));
+                assertFalse(passenger.getEmail(), hash.matches("demo@1234"));
+            }
+        });
+    }
+
+    @Test
+    public void aResetBringsBackTheDemoCustomersAndForgetsNewOnes() {
+        db.execute(() -> passengers.insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
+        assertEquals(6, db.run(() -> passengers.list()).size());
+
+        db.reset(TODAY);
+
+        assertEquals(5, db.run(() -> passengers.list()).size());
+        assertTrue(db.run(() -> passengers.findByEmail("amaya@example.com")).isEmpty());
+        assertEquals(6, db.run(() -> passengers.insert(new Passenger(0, "Binura", "binura@example.com",
+                new Resident()))).getPassengerId());
     }
 }

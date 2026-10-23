@@ -30,6 +30,11 @@ public class TemporaryAccount extends Account {
 
     @Override
     public Account copy() {
-        return new TemporaryAccount(getBalance(), getPassengerId(), getAccountId(), visaExpiry);
+        return withId(getAccountId());
+    }
+
+    @Override
+    public Account withId(long newAccountId) {
+        return new TemporaryAccount(getBalance(), getPassengerId(), newAccountId, visaExpiry);
     }
 }

@@ -8,6 +8,7 @@ import lk.metrolink.journey.domain.Dates;
 import lk.metrolink.journey.domain.FareRule;
 import lk.metrolink.journey.domain.NonResident;
 import lk.metrolink.journey.domain.Passenger;
+import lk.metrolink.journey.domain.PasswordHash;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Residency;
 import lk.metrolink.journey.domain.Resident;
@@ -24,6 +25,12 @@ import lk.metrolink.journey.domain.TicketState;
  * not part of this one. They are test data, not an implementation of those functions.
  */
 final class DemoData {
+
+    /** Every demo passenger logs in with this password. It is demo data, so it is written here on purpose. */
+    static final String DEMO_PASSWORD = "Demo@1234";
+
+    /** A small number of repeats keeps demo data and tests fast. Real registrations use the full default. */
+    private static final int DEMO_HASH_ITERATIONS = 1_000;
 
     private DemoData() {
     }
@@ -98,6 +105,10 @@ final class DemoData {
         Account account = passenger.openAccount(id);       // one account per passenger; same id keeps the demo readable
         account.credit(balance, fundedAt);
         t.accounts.put(id, account);
+        t.credentials.put(id, PasswordHash.of(DEMO_PASSWORD, DEMO_HASH_ITERATIONS));
+        // Customers who register later get the next free numbers.
+        t.nextPassengerId = Math.max(t.nextPassengerId, id + 1);
+        t.nextAccountId = Math.max(t.nextAccountId, id + 1);
     }
 
     private static void ticket(InMemoryDatabase.Tables t, String qr, long passengerId, String routeNo, String from,

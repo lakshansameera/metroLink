@@ -3,6 +3,7 @@ package lk.metrolink.journey;
 import java.time.LocalDate;
 import lk.metrolink.journey.fare.FareCalculator;
 import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
+import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
 import lk.metrolink.journey.repository.memory.InMemoryDatabase;
 import lk.metrolink.journey.repository.memory.InMemoryFareRuleRepository;
 import lk.metrolink.journey.repository.memory.InMemoryFareTransactionRepository;
@@ -12,6 +13,7 @@ import lk.metrolink.journey.repository.memory.InMemoryRouteRepository;
 import lk.metrolink.journey.repository.memory.InMemoryTicketRepository;
 import lk.metrolink.journey.service.AccountService;
 import lk.metrolink.journey.service.JourneyService;
+import lk.metrolink.journey.service.OnboardingService;
 import lk.metrolink.journey.service.QRTicketService;
 import lk.metrolink.journey.service.QueryService;
 import lk.metrolink.journey.service.ReaderService;
@@ -26,6 +28,7 @@ public final class Container {
     public final InMemoryDatabase db;
     public final QueryService queries;
     public final ReaderService reader;
+    public final OnboardingService onboarding;
     public final TestDataService testData;
 
     private final LocalDate seededFor;
@@ -41,6 +44,7 @@ public final class Container {
         InMemoryFareTransactionRepository transactions = new InMemoryFareTransactionRepository(db);
         InMemoryTicketRepository tickets = new InMemoryTicketRepository(db);
         InMemoryJourneyRepository journeys = new InMemoryJourneyRepository(db);
+        InMemoryCredentialRepository credentials = new InMemoryCredentialRepository(db);
 
         AccountService accountService = new AccountService(accounts, transactions);
         QRTicketService ticketService = new QRTicketService(tickets, journeys);
@@ -49,6 +53,7 @@ public final class Container {
 
         this.queries = new QueryService(db, passengers, accounts, tickets, journeys, transactions, routes);
         this.reader = new ReaderService(db, journeyService, routes, queries);
+        this.onboarding = new OnboardingService(db, passengers, accounts, credentials, queries);
         this.testData = new TestDataService(db, accountService, accounts, queries, () -> db.reset(seededFor));
     }
 

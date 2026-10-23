@@ -1,17 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from './api';
 import { JourneyList } from './components/JourneyList';
+import { Onboarding } from './components/Onboarding';
 import { PassengerList } from './components/PassengerList';
 import { ReaderGlass } from './components/ReaderGlass';
 import { RouteLine } from './components/RouteLine';
 import { TicketList } from './components/TicketList';
 import type { Direction, Journey, Passenger, ReaderDisplay, Reference, Ticket } from './types';
 
+type View = 'reader' | 'onboarding';
+
+const heading: Record<View, { title: string; line: string }> = {
+  reader: { title: 'MetroLink reader', line: 'Tap in, tap out, and see what the reader decides.' },
+  onboarding: { title: 'MetroLink customers', line: 'Open an account, or log in to the one you have.' },
+};
+
 export function App() {
+  /** Changes on every reset, so the sign-up screen starts empty again. */
+  const [startOver, setStartOver] = useState(0);
   const [reference, setReference] = useState<Reference | null>(null);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [journeys, setJourneys] = useState<Journey[]>([]);
+  /** Who logged in, or null. The server keeps no session, so this only decides which screen shows and whose things. */
+  const [loggedIn, setLoggedIn] = useState<Passenger | null>(null);
 
   const [token, setToken] = useState('');
   const [stopId, setStopId] = useState('S1');
@@ -46,8 +58,16 @@ export function App() {
     };
   }, []);
 
-  const ticket = useMemo(() => tickets.find((t) => t.qrCode === token), [tickets, token]);
-  const journey = useMemo(() => journeys.find((j) => j.ticketId === ticket?.ticketId), [journeys, ticket]);
+  // Nobody sees the Reader until they log in. Then it shows only that customer's account, tickets and journeys.
+  const view: View = loggedIn ? 'reader' : 'onboarding';
+  const customerId = loggedIn?.passengerId ?? null;
+  const customer = passengers.find((p) => p.passengerId === customerId) ?? loggedIn;
+  const shownPassengers = useMemo(() => passengers.filter((p) => p.passengerId === customerId), [passengers, customerId]);
+  const shownTickets = useMemo(() => tickets.filter((t) => t.passengerId === customerId), [tickets, customerId]);
+  const shownJourneys = useMemo(() => journeys.filter((j) => j.passengerId === customerId), [journeys, customerId]);
+
+  const ticket = useMemo(() => shownTickets.find((t) => t.qrCode === token), [shownTickets, token]);
+  const journey = useMemo(() => shownJourneys.find((j) => j.ticketId === ticket?.ticketId), [shownJourneys, ticket]);
   const stopName = reference?.stops.find((s) => s.stopId === stopId)?.name ?? stopId;
 
   /** Runs an action, then reloads what the server holds, and shows any error the server explained. */
@@ -67,7 +87,7 @@ export function App() {
   function pick(t: Ticket) {
     setToken(t.qrCode);
     setResult(null);
-    const j = journeys.find((x) => x.ticketId === t.ticketId);
+    const j = shownJourneys.find((x) => x.ticketId === t.ticketId);
     // A passenger already on the train taps out at the planned stop next. Anyone else taps in where the ticket starts.
     setStopId(j && j.status !== 'COMPLETED' ? t.plannedDestinationStopId : t.boardingStopId);
   }
@@ -81,23 +101,60 @@ export function App() {
 
   const settle = (journeyId: number) => run(async () => setResult(await api.settle(journeyId)));
   const topUp = (passengerId: number, amount: number) => run(async () => void (await api.addCredit(passengerId, amount)));
+
+  /** Clears whatever the Reader was showing, so one customer's ticket is never left selected for the next. */
+  function clearReader() {
+    setResult(null);
+    setToken('');
+    setStopId('S1');
+  }
+
+  /** The Reader screen opens, showing only this customer's things. */
+  function logIn(customerWhoLoggedIn: Passenger) {
+    clearReader();
+    setLoggedIn(customerWhoLoggedIn);
+    void run(async () => {}); // reload, so the balance and tickets are current
+  }
+
+  /** Back to the first screen, with empty forms. */
+  function logOut() {
+    clearReader();
+    setLoggedIn(null);
+    setStartOver((n) => n + 1);
+  }
+
   const reset = () =>
     run(async () => {
       await api.reset();
-      setResult(null);
-      setToken('');
-      setStopId('S1');
+      setStartOver((n) => n + 1);
+      // Customers who registered are gone after a reset, so nobody stays logged in.
+      setLoggedIn(null);
+      clearReader();
     });
 
   return (
     <>
       <header className="masthead">
-        <h1>MetroLink reader</h1>
-        <p>Tap in, tap out, and see what the reader decides.</p>
+        <h1>{heading[view].title}</h1>
+        <p>{heading[view].line}</p>
         <button type="button" className="quiet" disabled={busy} onClick={reset}>
           Start over with demo data
         </button>
       </header>
+
+      {customer && (
+        <div className="whoami-wrap">
+          <section className="whoami" aria-label="Logged in customer">
+            <p>
+              Logged in as <strong>{customer.name}</strong>
+              <span className="whoami-email">{customer.email}</span>
+            </p>
+            <button type="button" className="quiet" onClick={logOut}>
+              Log out
+            </button>
+          </section>
+        </div>
+      )}
 
       {error && (
         <p className="banner" role="alert">
@@ -105,12 +162,14 @@ export function App() {
         </p>
       )}
 
-      {!reference ? (
+      {view === 'onboarding' ? (
+        <Onboarding key={startOver} onChanged={refresh} onLoggedIn={logIn} />
+      ) : !reference ? (
         <p className="loading">{error ? '' : 'Loading the network.'}</p>
       ) : (
         <main className="shell">
           <div className="area-tickets">
-            <TicketList tickets={tickets} journeys={journeys} selected={token} onSelect={pick} />
+            <TicketList tickets={shownTickets} journeys={shownJourneys} selected={token} onSelect={pick} />
           </div>
 
           <div className="area-line">
@@ -131,10 +190,10 @@ export function App() {
           </div>
 
           <div className="area-people">
-            <PassengerList passengers={passengers} onTopUp={topUp} busy={busy} />
+            <PassengerList passengers={shownPassengers} onTopUp={topUp} busy={busy} />
           </div>
           <div className="area-journeys">
-            <JourneyList journeys={journeys} onSettle={settle} busy={busy} />
+            <JourneyList journeys={shownJourneys} onSettle={settle} busy={busy} />
           </div>
         </main>
       )}

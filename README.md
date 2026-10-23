@@ -2,10 +2,15 @@
 
 A bus reader for MetroLink. A passenger taps a QR ticket going in and going out. The server checks the ticket, works out the fare for the stops actually travelled, takes it from the passenger's account, and tells the reader what to show.
 
-This repository holds one function of the larger MetroLink system, **Journey Execution** (scan in, scan out, fare calculation, payment settlement). Alerts, top-ups and ticket issuing belong to other functions and are only stood in for by demo data.
+This repository holds two functions of the larger MetroLink system:
+
+- **Journey Execution**: scan in, scan out, fare calculation, payment settlement.
+- **Customer onboarding**: register a new customer and open their account, and log an existing customer in. It is the "New user - Registration" and "Existing user - Login" part of the Top Up Credit sequence diagram.
+
+Alerts, top-ups and ticket issuing belong to other functions and are only stood in for by demo data.
 
 - `backend`: Java 17, plain JDK HTTP server, Jackson, JUnit 4, Maven. No framework.
-- `frontend`: React and Vite. It only displays what the server decides.
+- `frontend`: React and Vite. It only displays what the server decides. Two screens: sign-up and log-in first, then the Reader once a customer has logged in.
 - `docs/rules.md`: every business rule as one testable sentence.
 - `docs/design.md`: the model, the state machines, the API and the design patterns.
 
@@ -30,11 +35,21 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The dev server forwards `/api` to port 4000.
+Open http://localhost:5173. The dev server forwards `/api` to port 4000. The first screen is sign-up and log-in. The Reader screen opens only after a customer logs in, and Log out brings the first screen back.
 
 ## Try it
 
 Demo passengers and tickets are created for today's date every time the server starts. "Start over with demo data" in the screen restores them at any time.
+
+The Reader shows only the logged-in customer's tickets, so log in as the owner of the ticket you want. Every demo customer's password is `Demo@1234`.
+
+| Ticket | Owner, log in as |
+|---|---|
+| `MLK-HAPPY01`, `MLK-OVERTR1`, `MLK-FLAT001`, `MLK-OLD0001`, `MLK-FUTURE1`, `MLK-CANCEL01` | Nimal Perera, `nimal@example.com` |
+| `MLK-PENDING` | Sanduni Silva, `sanduni@example.com` |
+| `MLK-NOFUNDS` | Kasun Fernando, `kasun@example.com` |
+| `MLK-TOURIST1` | Emma Walker, `emma@example.com` |
+| `MLK-VISAEXP1` | Hiro Tanaka, `hiro@example.com` |
 
 | Ticket | What to try | What you should see |
 |---|---|---|
@@ -49,18 +64,47 @@ Demo passengers and tickets are created for today's date every time the server s
 | `MLK-VISAEXP1` | Tap in | Refused: the tourist's visa has expired, so the account cannot be used |
 | any | Tap out twice | The second tap changes nothing |
 
+## Try customer onboarding
+
+Start on the first screen, which has the sign-up form and the log-in form. Registrations are kept in memory, and "Start over with demo data" forgets them.
+
+| What to do | What you should see |
+|---|---|
+| Press "Open my account" with an empty form | Every wrong field is marked at once: name, email, password and residency |
+| Choose Resident, fill in the rest, open the account | "Account opened": a **permanent** account with LKR 0, and the customer number, kind and balance on the card. The log-in form is filled in with the new email |
+| Choose Non-resident | A visa expiry date field appears. Leave it empty or pick a past date and you are told. A date of today or later gives a **temporary** account that works until that date |
+| Register the same email again, even in capitals or with spaces | "This email is already registered" |
+| Log in with the email and password you just used | The **Reader** screen opens, with "Logged in as ..." and a Log out button. It shows only that customer's account, tickets and journeys, and every ticket shows its travel date. A new customer has no tickets yet |
+| Log in with a wrong password, or with an email nobody has | The same message for both: "That email and password do not match an account." |
+| Log in as `nimal@example.com` with `Demo@1234` | Works, and the Reader shows his six tickets. All five demo customers use the password `Demo@1234`. Log in as `sanduni@example.com` and you see her one ticket instead |
+| Press Log out | Back to the first screen with empty forms. The Reader is not reachable again until someone logs in |
+| Log in as the new customer, and press Add 50 under "Your account" | The balance goes up, but there are no tickets: issuing tickets is another function |
+
+The rules are O1 to O9 in `docs/rules.md`. Section 8 of `docs/design.md` shows how each message in the sequence diagram maps to code.
+
 ## API
 
-One endpoint carries the whole function: `POST /api/reader/scan` with `{ "qrCode", "direction": "IN" | "OUT", "stopId", "scannedAt" (optional) }`. A refused ticket is a normal answer (HTTP 200, `outcome: "REJECTED"`), not an error. The full list is in `docs/design.md`.
+Customer onboarding has two endpoints:
+
+| Endpoint | Body | Answer |
+|---|---|---|
+| `POST /api/onboarding/register` | `{ "name", "email", "password", "residency": "RESIDENT" \| "NON_RESIDENT", "visaExpiry": "2026-12-31" }` (`visaExpiry` only for a non-resident) | 201 with `{ "userId", "message", "customer": { ... } }`. 400 `VALIDATION` with one entry per wrong field. 409 `EMAIL_TAKEN`. |
+| `POST /api/onboarding/login` | `{ "email", "password" }` | 200 with the same shape. 401 `INVALID_LOGIN` for a wrong password or an unknown email. |
+
+No answer ever contains the password or its hash.
+
+For Journey Execution, one endpoint carries the whole function: `POST /api/reader/scan` with `{ "qrCode", "direction": "IN" | "OUT", "stopId", "scannedAt" (optional) }`. A refused ticket is a normal answer (HTTP 200, `outcome: "REJECTED"`), not an error. The full list is in `docs/design.md`.
 
 ## Code map
 
 ```
 backend/src/main/java/lk/metrolink/journey
-  domain/        Passenger, Account (permanent and temporary), QRTicket, Journey, Route, FareRule, states
+  domain/        Passenger, Account (permanent and temporary), QRTicket, Journey, Route, FareRule, states,
+                 OnboardingRequest (what a registration may contain), PasswordHash
   fare/          FareCalculator and the distance and flat strategies
   repository/    interfaces, plus memory/ with the in-memory database and unit of work
-  service/       JourneyService (the workflow), ReaderService (the front door), QueryService
+  service/       JourneyService (the workflow), ReaderService (the front door), QueryService,
+                 OnboardingService (register and log in)
   web/           HTTP server, routes, validation
   Container.java wires everything together
 ```

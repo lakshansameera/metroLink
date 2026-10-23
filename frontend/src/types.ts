@@ -24,11 +24,13 @@ export interface Reference {
   routes: Route[];
 }
 
+export type Residency = 'RESIDENT' | 'NON_RESIDENT';
+
 export interface Passenger {
   passengerId: number;
   name: string;
   email: string;
-  residency: 'RESIDENT' | 'NON_RESIDENT';
+  residency: Residency;
   accountId: number;
   accountType: 'PERMANENT' | 'TEMPORARY';
   balance: number;
@@ -87,4 +89,20 @@ export interface ReaderDisplay {
   journey?: Journey;
   fare: Fare;
   overtravelled: boolean;
+}
+
+/** What the registration form sends. A resident sends no visa date. */
+export interface RegisterInput {
+  name: string;
+  email: string;
+  password: string;
+  residency?: Residency;
+  visaExpiry?: string;
+}
+
+/** The answer to a registration or a login. It never carries a password. */
+export interface AuthResult {
+  userId: number;
+  message: string;
+  customer: Passenger;
 }

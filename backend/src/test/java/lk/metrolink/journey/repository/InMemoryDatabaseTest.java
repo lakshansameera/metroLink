@@ -12,8 +12,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import lk.metrolink.journey.domain.Account;
+import lk.metrolink.journey.domain.Passenger;
+import lk.metrolink.journey.domain.PasswordHash;
+import lk.metrolink.journey.domain.Resident;
 import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
+import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
 import lk.metrolink.journey.repository.memory.InMemoryDatabase;
+import lk.metrolink.journey.repository.memory.InMemoryPassengerRepository;
 import lk.metrolink.journey.repository.memory.InMemoryTicketRepository;
 import org.junit.Before;
 import org.junit.Test;
@@ -167,5 +172,32 @@ public class InMemoryDatabaseTest {
         return new lk.metrolink.journey.domain.QRTicket(0, qr, t.getPassengerId(), t.getRouteNo(),
                 t.getBoardingStopId(), t.getPlannedDestinationStopId(), t.getTravelDate(), t.getQuotedFare(),
                 t.getIssuedAt(), lk.metrolink.journey.domain.TicketState.of("ACTIVE"));
+    }
+
+
+    @Test
+    public void aFailedRegistrationRollsBackEveryRowItAddedAndGivesTheIdsBack() {
+        InMemoryPassengerRepository passengers = new InMemoryPassengerRepository(db);
+        InMemoryCredentialRepository credentials = new InMemoryCredentialRepository(db);
+
+        try {
+            db.run(() -> {
+                Passenger saved = passengers.insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident()));
+                credentials.insert(saved.getPassengerId(), PasswordHash.of("Sunny day 42", 1_000));
+                accounts.insert(saved.openAccount(0));
+                throw new IllegalStateException("something failed after three inserts");
+            });
+            fail("expected IllegalStateException");
+        } catch (IllegalStateException expected) {
+            // rolled back
+        }
+
+        db.execute(() -> {
+            assertTrue(passengers.findByEmail("amaya@example.com").isEmpty());
+            assertTrue(credentials.findByPassenger(6).isEmpty());
+            assertTrue(accounts.findByPassenger(6).isEmpty());
+        });
+        Passenger next = db.run(() -> passengers.insert(new Passenger(0, "Binura", "binura@example.com", new Resident())));
+        assertEquals(6, next.getPassengerId());
     }
 }

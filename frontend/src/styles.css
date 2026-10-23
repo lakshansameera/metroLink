@@ -14,6 +14,9 @@
   --stop: #b3342c;
   --glass-idle: #13283b;
   --focus: #0b6e99;
+  --on-line: #ffffff;
+  --bad-ink: #b3342c;
+  --field: #ffffff;
 
   --signage: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
   --body: 'Barlow', system-ui, 'Segoe UI', sans-serif;
@@ -38,6 +41,9 @@
     --line-tint: #17394b;
     --glass-idle: #1b3347;
     --focus: #4fb5e3;
+    --on-line: #06222f;
+    --bad-ink: #ff8f86;
+    --field: #0b1620;
   }
 }
 
@@ -104,7 +110,7 @@ button:disabled {
   color: var(--ink-soft);
 }
 
-.masthead button {
+.masthead > button {
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: end;
@@ -241,14 +247,53 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.ticket-date,
 .ticket-who,
 .ticket-note {
   color: var(--ink-soft);
   font-size: 0.9375rem;
 }
 
+.ticket-date time {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .ticket-note {
   text-align: right;
+}
+
+.ticket-who {
+  grid-column: 1 / -1;
+}
+
+/* ---------- logged-in customer ---------- */
+
+.whoami-wrap {
+  max-width: 76rem;
+  margin: 0 auto 1rem;
+  padding: 0 1rem;
+}
+
+.whoami {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--line-tint);
+  border-left: 4px solid var(--line);
+}
+
+.whoami p {
+  margin: 0;
+}
+
+.whoami-email {
+  margin-left: 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
 }
 
 /* ---------- the line ---------- */
@@ -534,4 +579,185 @@ button:disabled {
   .glass {
     transition: none;
   }
+}
+
+/* ---------- new customer ---------- */
+
+.signup {
+  display: grid;
+  gap: 1rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'register'
+    'welcome';
+}
+
+.area-register { grid-area: register; }
+.area-welcome { grid-area: welcome; display: grid; gap: 1rem; align-content: start; }
+
+@media (min-width: 60rem) {
+  .signup {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-areas: 'register welcome';
+    align-items: start;
+  }
+}
+
+.welcome {
+  min-height: 15rem;
+}
+
+/* A figure with a long value (a date) gets a whole row, so it never wraps onto two lines. */
+.figures .figure-wide {
+  grid-column: 1 / -1;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+}
+
+.field label,
+.choices legend {
+  font-weight: 600;
+}
+
+.field input[type='text'],
+.field input[type='email'],
+.field input[type='password'],
+.field input[type='date'] {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 2px solid var(--ink-soft);
+  border-radius: 8px;
+}
+
+.field input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.field-bad input {
+  border-color: var(--bad-ink);
+}
+
+.field-hint {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.field-error,
+.form-error {
+  color: var(--bad-ink);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.field-error::before,
+.form-error::before {
+  content: 'Problem: ';
+}
+
+.form-error {
+  margin-bottom: 0.75rem;
+}
+
+.pw-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pw-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.choices {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.choices legend {
+  padding: 0;
+  margin-bottom: 0.4rem;
+}
+
+.choices-error {
+  margin: -0.5rem 0 1rem;
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr;
+  gap: 0 0.6rem;
+  align-items: center;
+  padding: 0.65rem 0.8rem;
+  border: 2px solid var(--rule);
+  border-left-width: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.choice:hover {
+  border-color: var(--ink-soft);
+}
+
+.choice-on {
+  background: var(--line-tint);
+  border-color: var(--line);
+}
+
+.choice:has(input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.choice input {
+  grid-row: 1 / span 2;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0;
+  accent-color: var(--line);
+}
+
+.choice-title {
+  font-family: var(--signage);
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.choice-note {
+  grid-column: 2;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.primary {
+  padding: 0.65rem 1.4rem;
+  background: var(--line);
+  color: var(--on-line);
+  border: 0;
+  border-radius: 8px;
+  font-family: var(--signage);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.login .hint {
+  margin-top: 0.75rem;
 }

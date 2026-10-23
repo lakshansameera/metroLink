@@ -7,5 +7,9 @@ public interface AccountRepository {
     Optional<Account> findById(long accountId);
 
     Optional<Account> findByPassenger(long passengerId);
+
+    /** Stores a new account and returns it with the real id. A passenger has one account. */
+    Account insert(Account draft);
+
     void save(Account account);
 }

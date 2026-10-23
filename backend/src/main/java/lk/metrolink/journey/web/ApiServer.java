@@ -5,6 +5,8 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -12,6 +14,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import lk.metrolink.journey.Container;
 import lk.metrolink.journey.domain.DomainException;
+import lk.metrolink.journey.domain.InvalidRegistrationException;
+import lk.metrolink.journey.domain.OnboardingRequest;
 
 /**
  * The HTTP front door, on the JDK's built-in server, so no framework is needed. Requests run on a pool of threads, so
@@ -89,12 +93,23 @@ public final class ApiServer {
             return new ApiResponse(400, new ErrorBody("VALIDATION", "Invalid request", e.issues()));
         } catch (BadJsonException e) {
             return new ApiResponse(400, new ErrorBody("BAD_JSON", e.getMessage(), null));
+        } catch (InvalidRegistrationException e) {
+            return new ApiResponse(400, new ErrorBody("VALIDATION", "Invalid request", issuesOf(e)));
         } catch (DomainException e) {
             return new ApiResponse(e.status(), new ErrorBody(e.code(), e.getMessage(), null));
         } catch (Exception e) {
             e.printStackTrace();
             return new ApiResponse(500, new ErrorBody("INTERNAL", "Unexpected server error", null));
         }
+    }
+
+    /** The registration problems, in the same shape as every other 400: one entry per wrong field. */
+    private static List<ValidationException.Issue> issuesOf(InvalidRegistrationException e) {
+        List<ValidationException.Issue> issues = new ArrayList<>();
+        for (OnboardingRequest.Problem problem : e.problems()) {
+            issues.add(new ValidationException.Issue(problem.getField(), problem.getMessage()));
+        }
+        return issues;
     }
 
     private static ApiResponse unknownEndpoint() {

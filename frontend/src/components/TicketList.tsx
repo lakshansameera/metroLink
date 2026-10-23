@@ -1,4 +1,4 @@
-import { ticketLabel, todayInColombo } from '../format';
+import { dayOf, ticketLabel, todayInColombo } from '../format';
 import type { Journey, Ticket } from '../types';
 
 interface Props {
@@ -24,6 +24,7 @@ export function TicketList({ tickets, journeys, selected, onSelect }: Props) {
   return (
     <section className="panel" aria-labelledby="tickets-title">
       <h2 id="tickets-title">Tickets</h2>
+      {tickets.length === 0 && <p className="empty">No tickets yet.</p>}
       <ul className="tickets">
         {tickets.map((ticket) => {
           const journey = byTicket.get(ticket.ticketId);
@@ -35,10 +36,13 @@ export function TicketList({ tickets, journeys, selected, onSelect }: Props) {
                   {ticket.boardingStopName} to {ticket.plannedDestinationStopName}
                 </span>
                 <span className="ticket-fare">LKR {ticket.quotedFare}</span>
+                <span className="ticket-date">
+                  Travel date <time dateTime={ticket.travelDate}>{dayOf(ticket.travelDate)}</time>
+                </span>
+                <span className="ticket-note">{note(ticket, journey, today)}</span>
                 <span className="ticket-who">
                   {ticket.passengerName}, {ticket.qrCode}
                 </span>
-                <span className="ticket-note">{note(ticket, journey, today)}</span>
               </button>
             </li>
           );

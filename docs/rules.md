@@ -46,6 +46,22 @@ Each rule is one testable sentence. Alerts belong to the separate Monitor Credit
 | A3 | A permanent account never expires. | 3a |
 | A4 | "Can pay" means the account is usable at scan time and has enough credit. Boarding (B5) and exit (X6) both use it. | 3d |
 
+## Customer onboarding (register and log in)
+
+These rules come from the "New user - Registration" and "Existing user - Login" branches of the Top Up Credit sequence diagram. Here "Proven in" names the test class. Registering is the same step as `register(name, email, password)`, then `createUser`, then `createAccount(userId, initialCredit=0)`, then `registrationSuccess(userId)`.
+
+| ID | Rule | Proven in |
+| --- | --- | --- |
+| O1 | Registration needs a name of 1 to 100 characters, an email that looks like one, a password of 8 to 128 characters, and a residency. Every problem is reported at once (`VALIDATION`, HTTP 400). | `OnboardingRequestTest`, `ApiTest` |
+| O2 | An email can be registered once. Emails are compared without case and without surrounding spaces. A second registration is refused (`EMAIL_TAKEN`, HTTP 409). | `OnboardingTest`, `ConstraintsTest` |
+| O3 | A resident gets a permanent account. A non-resident must give a visa expiry date that is today or later (Asia/Colombo) and gets a temporary account valid through that date. A resident must not give a visa date. Residency decides, not nationality (see A1, A2). | `OnboardingRequestTest`, `OnboardingTest` |
+| O4 | A new account starts with LKR 0. | `OnboardingTest` |
+| O5 | The customer, the password and the account are created together or not at all (see D5). | `OnboardingTest` |
+| O6 | The password is never stored or returned. Only a salted PBKDF2 hash is kept. | `PasswordHashTest`, `OnboardingTest`, `ApiTest` |
+| O7 | Logging in with the right email and password succeeds and returns the customer. | `OnboardingTest`, `ApiTest` |
+| O8 | A wrong password and an unknown email give the same answer (`INVALID_LOGIN`, HTTP 401), so the answer never reveals which emails are registered. | `OnboardingTest`, `ApiTest` |
+| O9 | A newly registered customer is in the passenger list straight away, with the right account kind and a balance of 0. | `OnboardingTest`, `ApiTest` |
+
 ## Worked numbers (for the first tests)
 
 Route R100 charges 20 + 4.5 per km from 1 July 2026, and 20 + 4.0 per km before that. Route R200 is a flat LKR 30.

@@ -9,6 +9,7 @@ import lk.metrolink.journey.domain.FareRule;
 import lk.metrolink.journey.domain.FareTransaction;
 import lk.metrolink.journey.domain.Journey;
 import lk.metrolink.journey.domain.Passenger;
+import lk.metrolink.journey.domain.PasswordHash;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.domain.Stop;
@@ -39,6 +40,9 @@ public final class InMemoryDatabase implements UnitOfWork {
         TreeMap<Long, QRTicket> tickets = new TreeMap<>();
         TreeMap<Long, Journey> journeys = new TreeMap<>();
         TreeMap<Long, FareTransaction> fareTransactions = new TreeMap<>();
+        TreeMap<Long, PasswordHash> credentials = new TreeMap<>();      // passenger id -> password hash
+        long nextPassengerId = 1;
+        long nextAccountId = 1;
         long nextTicketId = 1;
         long nextJourneyId = 1;
         long nextTransactionId = 1;
@@ -53,6 +57,9 @@ public final class InMemoryDatabase implements UnitOfWork {
             t.tickets = new TreeMap<>(tickets);
             t.journeys = new TreeMap<>(journeys);
             t.fareTransactions = new TreeMap<>(fareTransactions);
+            t.credentials = new TreeMap<>(credentials);
+            t.nextPassengerId = nextPassengerId;
+            t.nextAccountId = nextAccountId;
             t.nextTicketId = nextTicketId;
             t.nextJourneyId = nextJourneyId;
             t.nextTransactionId = nextTransactionId;

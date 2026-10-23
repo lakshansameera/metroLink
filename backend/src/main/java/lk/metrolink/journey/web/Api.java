@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import lk.metrolink.journey.Container;
+import lk.metrolink.journey.domain.BookingRequest;
 import lk.metrolink.journey.domain.OnboardingRequest;
 import lk.metrolink.journey.domain.ResidencyKind;
 import lk.metrolink.journey.service.ScanDirection;
@@ -67,6 +68,12 @@ final class Api {
             return ApiResponse.ok(c.onboarding.login(email, password));
         });
 
+        // Ticket booking: ask what a trip costs, then book it. Both check the same rules, and a request that cannot go
+        // ahead is an error here (400, 404), because the customer has to change something and try again. Booking is
+        // 201 Created. Neither moves any money: the fare is charged at the exit.
+        router.add("POST", "/tickets/quote", request -> ApiResponse.ok(c.booking.quote(bookingRequest(request))));
+        router.add("POST", "/tickets", request -> ApiResponse.created(c.booking.book(bookingRequest(request))));
+
         // After a top-up, pay the fare of a journey that is waiting for payment.
         router.add("POST", "/journeys/{id}/settle", request -> ApiResponse.ok(c.reader.settle(request.id("id"))));
 
@@ -84,5 +91,16 @@ final class Api {
         });
 
         return router;
+    }
+
+    private static BookingRequest bookingRequest(ApiRequest request) {
+        Fields fields = Fields.of(request.body());
+        long passengerId = fields.positiveInt("passengerId", Long.MAX_VALUE);
+        String routeNo = fields.optionalText("routeNo");
+        String boardingStopId = fields.optionalText("boardingStopId");
+        String destinationStopId = fields.optionalText("destinationStopId");
+        LocalDate travelDate = fields.optionalDate("travelDate");
+        fields.check();
+        return new BookingRequest(passengerId, routeNo, boardingStopId, destinationStopId, travelDate);
     }
 }

@@ -1,4 +1,16 @@
-import type { AuthResult, Direction, Journey, Passenger, ReaderDisplay, Reference, RegisterInput, Ticket } from './types';
+import type {
+  AuthResult,
+  BookingInput,
+  BookingResult,
+  Direction,
+  Journey,
+  Passenger,
+  ReaderDisplay,
+  Reference,
+  RegisterInput,
+  Ticket,
+  TicketQuote,
+} from './types';
 
 /** One wrong field in a rejected request. `path` is the field name, empty when the whole body is wrong. */
 export interface FieldIssue {
@@ -52,6 +64,10 @@ export const api = {
   scan: (qrCode: string, direction: Direction, stopId: string) =>
     request<ReaderDisplay>('POST', '/reader/scan', { qrCode, direction, stopId }),
   settle: (journeyId: number) => request<ReaderDisplay>('POST', `/journeys/${journeyId}/settle`),
+
+  // Ticket booking. A quote creates nothing and takes no money; booking creates the ticket. The fare is charged later.
+  quote: (input: BookingInput) => request<TicketQuote>('POST', '/tickets/quote', input),
+  book: (input: BookingInput) => request<BookingResult>('POST', '/tickets', input),
 
   // Customer onboarding: the registration and login branches of the Top Up Credit sequence.
   register: (input: RegisterInput) => request<AuthResult>('POST', '/onboarding/register', input),

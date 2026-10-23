@@ -106,3 +106,29 @@ export interface AuthResult {
   message: string;
   customer: Passenger;
 }
+
+/** What the booking form sends: one trip on one day for one customer. */
+export interface BookingInput {
+  passengerId: number;
+  routeNo: string;
+  boardingStopId: string;
+  destinationStopId: string;
+  travelDate: string;
+}
+
+/** What a trip would cost, from the same fare rules that charge at the exit. */
+export interface TicketQuote {
+  fare: number;
+  distanceKm: number;
+  fareType: 'DISTANCE' | 'FLAT';
+  balance: number;
+  canPayNow: boolean;
+}
+
+/** The answer to a booking: the new ticket and one sentence to show. */
+export interface BookingResult {
+  ticket: Ticket;
+  message: string;
+  balance: number;
+  canPayNow: boolean;
+}

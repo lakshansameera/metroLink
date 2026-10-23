@@ -14,6 +14,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import lk.metrolink.journey.Container;
 import lk.metrolink.journey.domain.DomainException;
+import lk.metrolink.journey.domain.BookingRequest;
+import lk.metrolink.journey.domain.InvalidBookingException;
 import lk.metrolink.journey.domain.InvalidRegistrationException;
 import lk.metrolink.journey.domain.OnboardingRequest;
 
@@ -95,6 +97,8 @@ public final class ApiServer {
             return new ApiResponse(400, new ErrorBody("BAD_JSON", e.getMessage(), null));
         } catch (InvalidRegistrationException e) {
             return new ApiResponse(400, new ErrorBody("VALIDATION", "Invalid request", issuesOf(e)));
+        } catch (InvalidBookingException e) {
+            return new ApiResponse(400, new ErrorBody("VALIDATION", "Invalid request", issuesOf(e)));
         } catch (DomainException e) {
             return new ApiResponse(e.status(), new ErrorBody(e.code(), e.getMessage(), null));
         } catch (Exception e) {
@@ -107,6 +111,15 @@ public final class ApiServer {
     private static List<ValidationException.Issue> issuesOf(InvalidRegistrationException e) {
         List<ValidationException.Issue> issues = new ArrayList<>();
         for (OnboardingRequest.Problem problem : e.problems()) {
+            issues.add(new ValidationException.Issue(problem.getField(), problem.getMessage()));
+        }
+        return issues;
+    }
+
+    /** The booking problems, in the same shape as every other 400. */
+    private static List<ValidationException.Issue> issuesOf(InvalidBookingException e) {
+        List<ValidationException.Issue> issues = new ArrayList<>();
+        for (BookingRequest.Problem problem : e.problems()) {
             issues.add(new ValidationException.Issue(problem.getField(), problem.getMessage()));
         }
         return issues;

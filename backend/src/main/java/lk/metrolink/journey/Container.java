@@ -6,9 +6,11 @@ import lk.metrolink.journey.repository.Store;
 import lk.metrolink.journey.repository.UnitOfWork;
 import lk.metrolink.journey.repository.memory.InMemoryStore;
 import lk.metrolink.journey.service.AccountService;
+import lk.metrolink.journey.service.BookingService;
 import lk.metrolink.journey.service.JourneyService;
 import lk.metrolink.journey.service.OnboardingService;
 import lk.metrolink.journey.service.QRTicketService;
+import lk.metrolink.journey.service.QrCodes;
 import lk.metrolink.journey.service.QueryService;
 import lk.metrolink.journey.service.ReaderService;
 import lk.metrolink.journey.service.TestDataService;
@@ -23,6 +25,7 @@ public final class Container {
     public final QueryService queries;
     public final ReaderService reader;
     public final OnboardingService onboarding;
+    public final BookingService booking;
     public final TestDataService testData;
 
     private Container(Store store, LocalDate seededFor) {
@@ -38,6 +41,8 @@ public final class Container {
                 store.fareTransactions(), store.routes());
         this.reader = new ReaderService(uow, journeyService, store.routes(), queries);
         this.onboarding = new OnboardingService(uow, store.passengers(), store.accounts(), store.credentials(), queries);
+        this.booking = new BookingService(uow, store.accounts(), store.tickets(), store.routes(), store.fareRules(),
+                new FareCalculator(), queries, QrCodes::next);
         this.testData = new TestDataService(uow, accountService, store.accounts(), queries,
                 () -> store.reset(seededFor));
     }

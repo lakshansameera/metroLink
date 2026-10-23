@@ -2,6 +2,8 @@ package lk.metrolink.journey.service;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.UnaryOperator;
 import lk.metrolink.journey.domain.Account;
 import lk.metrolink.journey.domain.Journey;
@@ -41,6 +43,11 @@ final class Fixture {
     final AccountService accountService;
     final QRTicketService ticketService;
     final JourneyService journeyService;
+    final QueryService queries;
+    final BookingService booking;
+
+    /** The QR codes the next bookings will draw, in order. When it is empty, real random codes are used. */
+    final List<String> queuedCodes = new ArrayList<>();
 
     Fixture(Store store) {
         this(store, real -> real);
@@ -61,6 +68,9 @@ final class Fixture {
         ticketService = new QRTicketService(tickets, journeys);
         journeyService = new JourneyService(db, tickets, journeys, routes, fareRules, ticketService,
                 accountService, new FareCalculator());
+        queries = new QueryService(db, passengers, accounts, tickets, journeys, transactions, routes);
+        booking = new BookingService(db, accounts, tickets, routes, fareRules, new FareCalculator(), queries,
+                () -> queuedCodes.isEmpty() ? QrCodes.next() : queuedCodes.remove(0));
     }
 
     ScanResult in(String qr, String stop, Instant at) {

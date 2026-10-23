@@ -1,6 +1,8 @@
 package lk.metrolink.journey.domain;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Optional;
 
 public class PermanentAccount extends Account{
 
@@ -16,6 +18,11 @@ public class PermanentAccount extends Account{
     @Override
     public boolean isUsableAt(Instant at) {
         return true;
+    }
+
+    @Override
+    public Optional<LocalDate> lastUsableDay() {
+        return Optional.empty();
     }
 
     @Override

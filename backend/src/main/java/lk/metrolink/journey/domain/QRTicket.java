@@ -30,6 +30,14 @@ public class QRTicket {
         this.state = state;
     }
 
+    /** A newly booked ticket: active, not yet stored (id 0), with no journey. */
+    public static QRTicket issue(String qrCode, long passengerId, String routeNo, String boardingStopId,
+                                 String plannedDestinationStopId, LocalDate travelDate, long quotedFare,
+                                 Instant issuedAt) {
+        return new QRTicket(0, qrCode, passengerId, routeNo, boardingStopId, plannedDestinationStopId, travelDate,
+                quotedFare, issuedAt, TicketState.of("ACTIVE"));
+    }
+
     public long getTicketId() {
         return ticketId;
     }

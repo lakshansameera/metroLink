@@ -65,6 +65,7 @@ The whole function is one endpoint, `POST /api/reader/scan`. The others only fee
 | `GET /api/tickets`, `/journeys`, `/journeys/{id}` | Lists for the screen | Display |
 | `POST /api/test-data/credit`, `/reset` | Stand-in for Top Up; restore the demo data | Demo |
 | `POST /api/onboarding/register`, `/login` | Register a customer and open the account; check a login | Customer onboarding (section 8) |
+| `POST /api/tickets/quote`, `POST /api/tickets` | Price a trip; book it | Ticket booking (section 10) |
 | `GET /api/health` | Is the server up | Smoke check |
 
 Request:
@@ -96,10 +97,10 @@ Status codes:
 | Code | When |
 |---|---|
 | 200 | Any business result, including a refused ticket (`outcome: REJECTED`). A rejection is an answer, not an error. |
-| 201 | A customer was registered |
-| 400 | Malformed request. Body: `{ "error": "VALIDATION", "message": "...", "details": [...] }`. A registration with wrong fields lists them all in `details`. |
+| 201 | A customer was registered, or a ticket was booked |
+| 400 | Malformed request. Body: `{ "error": "VALIDATION", "message": "...", "details": [...] }`. A registration or a booking with wrong fields lists them all in `details`. |
 | 401 | `INVALID_LOGIN`: a wrong password or an unknown email (the same answer for both) |
-| 404 | Unknown stop, journey or passenger |
+| 404 | Unknown stop, journey or passenger (a booking for a customer who does not exist too) |
 | 409 | Illegal state change, the store refused the data (constraint violation), or `EMAIL_TAKEN` |
 | 422 | The account has expired, so it cannot be changed |
 | 500 | Bugs only |
@@ -281,3 +282,49 @@ Every test that touches a store (services, constraints, demo data, onboarding, t
 - **Only H2 is tested.** The SQL avoids vendor features, but PostgreSQL and MySQL were not run. MySQL reports every broken constraint with one SQL state, so its refusals would be accurate in kind but less specific in wording.
 - **Demo tickets are dated for the day the database was created or reset.** Later they are for the wrong day, so press "Start over with demo data" to get tickets for the current day. That also removes registered customers.
 - **Local settings only.** The default login is `sa` with an empty password, fine for a file on a developer's machine and not for a deployment.
+
+## 10. Ticket booking
+
+Until now tickets existed only as demo data. A customer can now book one. Nothing about the reader changed: a booked ticket is an ordinary `QRTicket` in the `ACTIVE` state, so the reader treats it like any other (rule T12). The rules are T1 to T12 in `docs/rules.md`.
+
+### The flow
+
+1. The screen asks `POST /api/tickets/quote` as soon as route, both stops and date are chosen, and again whenever one changes. The answer is the fare, the distance, whether the fare is by distance or flat, the balance, and whether the balance covers the fare now. The screen only displays it.
+2. The customer presses Book. `POST /api/tickets` runs the same checks again, because a quote is not a promise.
+3. `BookingService.book` runs one unit of work: find the account (404 if there is none, T5); find the route; ask `BookingRequest.problems(route, account, today)` for everything wrong (T1 to T4), and refuse with all of it if there is anything; price the trip with `FareCalculator` (T6); draw a QR code nobody has (T8); store `QRTicket.issue(...)` (T7, T9); build the answer (T10). A failure at any step leaves nothing behind, including the ticket id, which is given back (D5).
+4. The screen reloads its lists, selects the new ticket, and the Reader is ready to tap it in.
+
+### Which class does what
+
+| Class | Job |
+|---|---|
+| `BookingRequest` | What a booking may contain. It judges itself from the facts it is handed (the route or null, the account, today's date) and reports every problem with the name of the field behind it. No database. |
+| `Account.lastUsableDay()` | Where the visa limit comes from. A temporary account returns its visa date and a permanent one returns nothing, so no code asks "is this account temporary". It is the same polymorphism as `isUsableAt`. |
+| `QRTicket.issue(...)` | A static factory. It is the only way a new ticket starts, and it always starts `ACTIVE`, so a service cannot create a ticket in another state by mistake. |
+| `BookingService` | Coordinates only, as the other services do. It holds no rule of its own: the request knows what is acceptable and the calculator knows the price. |
+| `QrCodes` | Makes the code text: `MLK-` and eight characters from 32 that exclude 0, O, 1 and I, drawn with `SecureRandom`. About 10^12 codes. |
+| `TicketQuote`, `BookingResult` | The two answers. They are views, so nothing in the domain depends on JSON. |
+
+### Decisions
+
+1. **Booking never takes money.** Decision 3 (charge on exit, never at boarding) already says the fare is charged when the customer gets off, so charging at booking would give the fare two moments. A booking answers "can pay now" instead (T10), and the screen tells the customer to add credit. It does not refuse them, because the exit is where the balance is decided and credit can be added any time before.
+2. **The quote and the charge use one calculator.** `FareCalculator` is given the route, the fare rules, the two stops and the travel date, exactly as the exit does, so the quote cannot drift from the charge. `BookingTest` taps a booked ticket in and out and checks the amount charged equals the amount quoted. If the customer gets off at a different stop, the fare for that stop is charged (X3), as for any ticket.
+3. **The visa limit is checked at booking.** A tourist cannot book a day after their visa ends, because the account would not work on that day (A2, T4). The last day itself is allowed. This is checked against the travel date, not today, so a tourist can book today for a day inside the visa.
+4. **All problems at once, with field names.** The 400 uses the same `VALIDATION` shape as registration, so the screen shows each message under its own field with the same code it uses for the sign-up form (`Field`, `byField`).
+5. **The server decides, the browser displays** (decision 5). The form has no rule of its own. The date picker only stops dates before today as a convenience. The 30-day limit, the stop order and the visa limit are shown only when the server says so, so a rule changed on the server needs no change in React.
+6. **Today is the Colombo date.** `book(request, at)` takes the moment, like a scan does, and its Colombo date is "today" (D6). The tests pass a moment just before and just after midnight in Colombo to prove it is not the UTC date.
+7. **A unique QR code.** `BookingService` draws a code, checks nobody has it, and tries again up to five times. The store's `UNIQUE (qr_code)` is the real guarantee (it also protects two simultaneous bookings). The retry only saves a customer from seeing an error in the very rare case of a clash.
+8. **A quote is not a reservation.** It creates nothing and holds nothing, so a quote can be asked as often as the screen likes. It is a 400 when the trip is wrong, which the browser's console logs as a failed request while the customer is still choosing stops. The screen shows the server's message and not the log line.
+
+### How it is tested
+
+`BookingRequestTest` covers the rules with no database, including every message. `BookingTest` extends `OnEveryStore`, so every rule runs on the in-memory store and on H2: all fields wrong at once, the boundaries of the date window (today, +30, yesterday, +31), the Colombo midnight, a tourist on and after the last visa day, the fare for a distance route and a flat route, that no money moves, a taken code, five taken codes, a failure after the ticket was written leaving nothing, that a refused booking does not use an id, the add-credit hint, that a quote creates nothing, and that a booked ticket can be tapped in today and is refused for another day. `ApiTest` covers the same over real HTTP, including the status codes and the field paths. The booking code was broken on purpose 34 ways (a check removed, a boundary moved by one day, the wrong date given to the fare, money taken, the retry removed, a wrong status code, and so on) and every one made at least one test fail.
+
+### Not built
+
+- **No cancellation, change or refund.** A booked ticket stays until its day passes. Because booking takes no money, there is nothing to refund.
+- **No limit on how many tickets a customer can hold**, and no check for duplicates: booking the same trip twice gives two tickets.
+- **No real identity.** The booking says which customer it is for (`passengerId`) and the server believes it, because there is no session or token (section 8, Not built). Anyone who can reach the server can book for any customer id.
+- **No timetable or capacity.** Any day in the window is accepted, and a ticket does not reserve a seat.
+- **A booked ticket does not expire by itself.** After its day, the reader refuses it for being for the wrong day (B2), but its status stays `ACTIVE` until some other process marks it `EXPIRED`.
+- **The 30-day window is a constant** (`BookingRequest.MAX_DAYS_AHEAD`), not a setting.

@@ -142,6 +142,7 @@ button:disabled {
   padding: 0 1rem 3rem;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
+    'book'
     'tickets'
     'line'
     'glass'
@@ -149,6 +150,7 @@ button:disabled {
     'journeys';
 }
 
+.area-book { grid-area: book; }
 .area-tickets { grid-area: tickets; }
 .area-line { grid-area: line; }
 .area-glass { grid-area: glass; }
@@ -159,6 +161,7 @@ button:disabled {
   .shell {
     grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
     grid-template-areas:
+      'book glass'
       'tickets glass'
       'line glass'
       'people journeys';
@@ -168,7 +171,7 @@ button:disabled {
   .area-glass {
     position: sticky;
     top: 1rem;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
   }
 }
 
@@ -629,7 +632,8 @@ button:disabled {
 .field input[type='text'],
 .field input[type='email'],
 .field input[type='password'],
-.field input[type='date'] {
+.field input[type='date'],
+.field select {
   width: 100%;
   padding: 0.55rem 0.7rem;
   font: inherit;
@@ -639,12 +643,18 @@ button:disabled {
   border-radius: 8px;
 }
 
-.field input:focus-visible {
+.field select:disabled {
+  opacity: 0.6;
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 1px;
 }
 
-.field-bad input {
+.field-bad input,
+.field-bad select {
   border-color: var(--bad-ink);
 }
 
@@ -760,4 +770,46 @@ button:disabled {
 
 .login .hint {
   margin-top: 0.75rem;
+}
+
+/* ---------- booking ---------- */
+
+.field-row {
+  display: grid;
+  align-items: start;
+  gap: 0 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 34rem) {
+  .field-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.quote,
+.booked {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--line-tint);
+  border-left: 5px solid var(--line);
+}
+
+.booked {
+  border-left-color: var(--go);
+  font-weight: 600;
+}
+
+.quote p {
+  margin: 0;
+}
+
+.quote-fare {
+  font-family: var(--signage);
+  font-size: 1.35rem;
+}
+
+.quote-note {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
 }

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { dayOf, ticketLabel, todayInColombo } from '../format';
 import type { Journey, Ticket } from '../types';
 
@@ -21,6 +22,12 @@ export function TicketList({ tickets, journeys, selected, onSelect }: Props) {
   const today = todayInColombo();
   const byTicket = new Map(journeys.map((j) => [j.ticketId, j]));
 
+  // A ticket just booked may sit below the fold of a long list, so bring the chosen one into view.
+  const chosen = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    chosen.current?.scrollIntoView({ block: 'nearest' });
+  }, [selected, tickets.length]);
+
   return (
     <section className="panel" aria-labelledby="tickets-title">
       <h2 id="tickets-title">Tickets</h2>
@@ -30,7 +37,7 @@ export function TicketList({ tickets, journeys, selected, onSelect }: Props) {
           const journey = byTicket.get(ticket.ticketId);
           const isSelected = ticket.qrCode === selected;
           return (
-            <li key={ticket.ticketId}>
+            <li key={ticket.ticketId} ref={isSelected ? chosen : undefined}>
               <button type="button" className="ticket" aria-pressed={isSelected} onClick={() => onSelect(ticket)}>
                 <span className="ticket-trip">
                   {ticket.boardingStopName} to {ticket.plannedDestinationStopName}

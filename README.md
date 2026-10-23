@@ -6,11 +6,12 @@ This repository holds two functions of the larger MetroLink system:
 
 - **Journey Execution**: scan in, scan out, fare calculation, payment settlement.
 - **Customer onboarding**: register a new customer and open their account, and log an existing customer in. It is the "New user - Registration" and "Existing user - Login" part of the Top Up Credit sequence diagram.
+- **Ticket booking**: a logged-in customer picks a route, two stops and a day, sees the fare, and books. The ticket is the same kind the reader already accepts.
 
-Alerts, top-ups and ticket issuing belong to other functions and are only stood in for by demo data.
+Alerts and top-ups belong to other functions. Top-up is only stood in for by the "Add 50" and "Add 100" buttons.
 
 - `backend`: Java 17, plain JDK HTTP server, plain JDBC, an embedded H2 database, Jackson, JUnit 4, Maven. No framework.
-- `frontend`: React and Vite. It only displays what the server decides. Two screens: sign-up and log-in first, then the Reader once a customer has logged in.
+- `frontend`: React and Vite. It only displays what the server decides. Two screens: sign-up and log-in first, then the Reader (with the booking panel) once a customer has logged in.
 - `docs/rules.md`: every business rule as one testable sentence.
 - `docs/design.md`: the model, the state machines, the API and the design patterns.
 
@@ -74,13 +75,31 @@ Start on the first screen, which has the sign-up form and the log-in form. Regis
 | Choose Resident, fill in the rest, open the account | "Account opened": a **permanent** account with LKR 0, and the customer number, kind and balance on the card. The log-in form is filled in with the new email |
 | Choose Non-resident | A visa expiry date field appears. Leave it empty or pick a past date and you are told. A date of today or later gives a **temporary** account that works until that date |
 | Register the same email again, even in capitals or with spaces | "This email is already registered" |
-| Log in with the email and password you just used | The **Reader** screen opens, with "Logged in as ..." and a Log out button. It shows only that customer's account, tickets and journeys, and every ticket shows its travel date. A new customer has no tickets yet |
+| Log in with the email and password you just used | The **Reader** screen opens, with "Logged in as ..." and a Log out button. It shows only that customer's account, tickets and journeys, and every ticket shows its travel date. A new customer has no tickets until they book one |
 | Log in with a wrong password, or with an email nobody has | The same message for both: "That email and password do not match an account." |
 | Log in as `nimal@example.com` with `Demo@1234` | Works, and the Reader shows his six tickets. All five demo customers use the password `Demo@1234`. Log in as `sanduni@example.com` and you see her one ticket instead |
 | Press Log out | Back to the first screen with empty forms. The Reader is not reachable again until someone logs in |
-| Log in as the new customer, and press Add 50 under "Your account" | The balance goes up, but there are no tickets: issuing tickets is another function |
+| Log in as the new customer, and press Add 50 under "Your account" | The balance goes up. Booking a ticket does not need credit, but tapping in does |
 
 The rules are O1 to O9 in `docs/rules.md`. Section 8 of `docs/design.md` shows how each message in the sequence diagram maps to code.
+
+## Try ticket booking
+
+Log in first (the "Book a ticket" panel is at the top of the Reader). A brand-new customer is the clearest test, because their ticket list starts empty.
+
+| What to do | What you should see |
+|---|---|
+| Choose route R100, "Get on at" Colombo Fort, "Get off at" Kiribathgoda | The fare appears before you book: **LKR 69 for 10.8 km**, "Charged when you get off, not now", and your balance. With no credit the note says to add credit before you tap in |
+| Choose a "Get off at" stop that is before the boarding stop | The server's message appears under that field: "The destination must come after the boarding stop". No fare is shown |
+| Set the travel date to yesterday, or to 31 days from today | "Travel date must be today or later" / "Travel date can be at most 30 days ahead". Today and 30 days ahead are accepted |
+| Press "Book ticket" | A green confirmation, the ticket appears in "Tickets" already selected, and the form empties. The balance has **not** changed |
+| Press "Tap in" straight away with no credit | Refused: not enough credit to board. Press "Add 100", then tap in and tap out at Kiribathgoda: **LKR 69 is charged, the same as the quote** |
+| Book a ticket for tomorrow and tap in | Refused: "This ticket is for a different day" |
+| Choose route R200 | A flat fare: LKR 30 for any two stops |
+| Log in as `emma@example.com` (visa ends 10 days after the day the data was created) and try to book a day after her visa ends | Refused, naming the date her account works through. Hiro (`hiro@example.com`) has no valid days at all |
+| Log in as someone else | They see only their own tickets |
+
+The rules are T1 to T12 in `docs/rules.md`. Section 10 of `docs/design.md` explains the design.
 
 ## Database
 
@@ -118,6 +137,15 @@ Customer onboarding has two endpoints:
 
 No answer ever contains the password or its hash.
 
+Ticket booking has two endpoints. They take the same body:
+
+| Endpoint | Body | Answer |
+|---|---|---|
+| `POST /api/tickets/quote` | `{ "passengerId": 6, "routeNo": "R100", "boardingStopId": "S1", "destinationStopId": "S5", "travelDate": "2026-11-02" }` | 200 with `{ "fare", "distanceKm", "fareType": "DISTANCE" \| "FLAT", "balance", "canPayNow" }`. Creates nothing. |
+| `POST /api/tickets` | the same | 201 with `{ "ticket": { ... }, "message", "balance", "canPayNow" }`. No money moves. |
+
+Both answer 400 `VALIDATION` with one entry in `details` per wrong field (`routeNo`, `boardingStopId`, `destinationStopId`, `travelDate`, or `passengerId` when it is missing or not a number), and 404 for a customer who does not exist.
+
 For Journey Execution, one endpoint carries the whole function: `POST /api/reader/scan` with `{ "qrCode", "direction": "IN" | "OUT", "stopId", "scannedAt" (optional) }`. A refused ticket is a normal answer (HTTP 200, `outcome: "REJECTED"`), not an error. The full list is in `docs/design.md`.
 
 ## Code map
@@ -125,11 +153,12 @@ For Journey Execution, one endpoint carries the whole function: `POST /api/reade
 ```
 backend/src/main/java/lk/metrolink/journey
   domain/        Passenger, Account (permanent and temporary), QRTicket, Journey, Route, FareRule, states,
-                 OnboardingRequest (what a registration may contain), PasswordHash
+                 OnboardingRequest (what a registration may contain), PasswordHash,
+                 BookingRequest (what a booking may contain)
   fare/          FareCalculator and the distance and flat strategies
   repository/    interfaces and Store, plus memory/ (in-memory store) and jdbc/ (SQL store, schema.sql)
   service/       JourneyService (the workflow), ReaderService (the front door), QueryService,
-                 OnboardingService (register and log in)
+                 OnboardingService (register and log in), BookingService (quote and book), QrCodes
   web/           HTTP server, routes, validation
   Container.java wires everything together
 ```

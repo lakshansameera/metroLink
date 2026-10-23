@@ -1,7 +1,9 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../api';
 import { dayOf, lkr, todayInColombo } from '../format';
 import type { AuthResult, Passenger, Residency } from '../types';
+import { byField, type Errors } from '../errors';
+import { Field } from './Field';
 
 interface Props {
   /** Reload the lists after a customer joins, so the Reader screen shows the new person at once. */
@@ -9,8 +11,6 @@ interface Props {
   /** A customer logged in. The app moves on to the Reader screen, showing only that customer's things. */
   onLoggedIn: (customer: Passenger) => void;
 }
-
-type Errors = Record<string, string>;
 
 /**
  * A 404 means a server is answering but has no sign-up routes, so an older build is still running on the port.
@@ -21,43 +21,6 @@ function explain(e: unknown): string {
     return 'The running server does not have sign-up yet, so it is an older build. Stop it, run mvn package in the backend folder, then start it again.';
   }
   return e instanceof ApiError ? e.message : 'Something went wrong.';
-}
-
-/** The first message for each field, so a field shows one clear sentence rather than a pile. */
-function byField(error: ApiError): Errors {
-  const found: Errors = {};
-  for (const issue of error.details) {
-    if (!(issue.path in found)) found[issue.path] = issue.message;
-  }
-  return found;
-}
-
-interface FieldProps {
-  id: string;
-  label: string;
-  hint?: string;
-  error?: string;
-  children: ReactNode;
-}
-
-function Field({ id, label, hint, error, children }: FieldProps) {
-  return (
-    <div className={error ? 'field field-bad' : 'field'}>
-      <label htmlFor={id}>{label}</label>
-      {children}
-      {error ? (
-        <p className="field-error" id={`${id}-note`}>
-          {error}
-        </p>
-      ) : (
-        hint && (
-          <p className="field-hint" id={`${id}-note`}>
-            {hint}
-          </p>
-        )
-      )}
-    </div>
-  );
 }
 
 /**

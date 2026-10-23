@@ -62,6 +62,25 @@ These rules come from the "New user - Registration" and "Existing user - Login" 
 | O8 | A wrong password and an unknown email give the same answer (`INVALID_LOGIN`, HTTP 401), so the answer never reveals which emails are registered. | `OnboardingTest`, `ApiTest` |
 | O9 | A newly registered customer is in the passenger list straight away, with the right account kind and a balance of 0. | `OnboardingTest`, `ApiTest` |
 
+## Ticket booking
+
+A customer books a ticket for a trip. This replaces the demo tickets as the way tickets come to exist. "Proven in" names the test class. Booking never takes money: the fare is only quoted, and is charged at the exit (decision 3 in `docs/design.md`).
+
+| ID | Rule | Proven in |
+| --- | --- | --- |
+| T1 | A booking needs a customer, a route, a boarding stop, a destination stop and a travel date. Every wrong field is reported at once (`VALIDATION`, HTTP 400). | `BookingRequestTest`, `BookingTest`, `ApiTest` |
+| T2 | The route must exist, both stops must be on it, and the destination must come after the boarding stop. | `BookingRequestTest`, `BookingTest` |
+| T3 | The travel date must be today or later in Asia/Colombo time (D6), and at most 30 days ahead. | `BookingRequestTest`, `BookingTest` |
+| T4 | A temporary account cannot book a day after its visa expiry date, because the account is not valid then (A2). A permanent account has no such limit. | `BookingRequestTest`, `BookingTest` |
+| T5 | A customer who does not exist cannot book (`NOT_FOUND`, HTTP 404). | `BookingTest`, `ApiTest` |
+| T6 | The quoted fare is what the fare calculator gives for the booked stops on the travel date, so it is the same fare the exit would charge (X3, X4). A flat route quotes its flat amount. | `BookingTest` |
+| T7 | Booking takes no money and changes no balance. The new ticket is `ACTIVE`, has no journey, and its issue time is the moment of booking. | `BookingTest` |
+| T8 | Every ticket gets its own QR code that is hard to guess. A code that is already taken is never reused: the service draws another, and the store refuses a duplicate anyway. | `BookingTest`, `ConstraintsTest`, `QrCodesTest` |
+| T9 | The ticket belongs to the customer who booked it and is in their ticket list at once. A booking is stored completely or not at all (D5). | `BookingTest` |
+| T10 | The answer says whether the account could pay the fare right now (A4), so the screen can tell the customer to add credit. It never refuses the booking for that. | `BookingTest` |
+| T11 | A quote checks the same rules as a booking and returns the fare, but creates nothing. | `BookingTest`, `ApiTest` |
+| T12 | A booked ticket works at the reader exactly like any other: it can be tapped in on its travel date and refused on any other day (B2). | `BookingTest`, `ApiTest` |
+
 ## Worked numbers (for the first tests)
 
 Route R100 charges 20 + 4.5 per km from 1 July 2026, and 20 + 4.0 per km before that. Route R200 is a flat LKR 30.

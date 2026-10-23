@@ -4,6 +4,7 @@ import java.time.Instant;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
 
 public class TemporaryAccount extends Account {
 
@@ -22,6 +23,11 @@ public class TemporaryAccount extends Account {
     @Override
     public boolean isUsableAt(Instant at) {
         return !Dates.localDate(at).isAfter(visaExpiry);
+    }
+
+    @Override
+    public Optional<LocalDate> lastUsableDay() {
+        return Optional.of(visaExpiry);
     }
 
     public LocalDate getVisaExpiry() {

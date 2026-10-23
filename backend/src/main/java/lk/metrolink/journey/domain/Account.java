@@ -1,5 +1,7 @@
 package lk.metrolink.journey.domain;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Optional;
 
 public abstract class Account {
 
@@ -33,6 +35,9 @@ public abstract class Account {
     public abstract String type();
 
     public abstract boolean isUsableAt(Instant at);
+
+    /** The last day the account can be used, or empty if it never expires. */
+    public abstract Optional<LocalDate> lastUsableDay();
 
     public final boolean hasSufficientCredit(long amount) {
         return balance >= amount;

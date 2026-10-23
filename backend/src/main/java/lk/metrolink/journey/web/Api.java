@@ -1,8 +1,11 @@
 package lk.metrolink.journey.web;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Map;
 import lk.metrolink.journey.Container;
+import lk.metrolink.journey.domain.OnboardingRequest;
+import lk.metrolink.journey.domain.ResidencyKind;
 import lk.metrolink.journey.service.ScanDirection;
 import lk.metrolink.journey.service.ScanRequest;
 
@@ -40,6 +43,28 @@ final class Api {
             Instant scannedAt = fields.optionalInstant("scannedAt");
             fields.check();
             return ApiResponse.ok(c.reader.scan(new ScanRequest(qrCode, direction, stopId, scannedAt)));
+        });
+
+        // Customer onboarding: the "New user - Registration" and "Existing user - Login" branches of the Top Up
+        // Credit sequence. A registration that cannot go ahead is an error here (400, 409), unlike a refused ticket,
+        // because the customer has to change something and try again.
+        router.add("POST", "/onboarding/register", request -> {
+            Fields fields = Fields.of(request.body());
+            String name = fields.optionalText("name");
+            String email = fields.optionalText("email");
+            String password = fields.optionalText("password");
+            ResidencyKind residency = fields.optionalEnum("residency", ResidencyKind.class);
+            LocalDate visaExpiry = fields.optionalDate("visaExpiry");
+            fields.check();
+            return ApiResponse.created(
+                    c.onboarding.register(new OnboardingRequest(name, email, password, residency, visaExpiry)));
+        });
+        router.add("POST", "/onboarding/login", request -> {
+            Fields fields = Fields.of(request.body());
+            String email = fields.text("email");
+            String password = fields.secret("password");
+            fields.check();
+            return ApiResponse.ok(c.onboarding.login(email, password));
         });
 
         // After a top-up, pay the fare of a journey that is waiting for payment.

@@ -2,6 +2,7 @@ package lk.metrolink.journey.web;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -118,6 +119,73 @@ final class Fields {
             return Dates.parseInstant(node.asText());
         } catch (DateTimeParseException e) {
             fail(name, "Must be an ISO 8601 date-time with an offset, such as 2026-10-21T09:30:00+05:30");
+            return null;
+        }
+    }
+
+    /** An optional string, kept exactly as typed. Null when absent. The rules about its content live in the domain. */
+    String optionalText(String name) {
+        JsonNode node = field(name);
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isTextual()) {
+            fail(name, "Invalid input: expected string");
+            return null;
+        }
+        return node.asText();
+    }
+
+    /** A required string kept exactly as typed, with no trimming. For passwords, where every character counts. */
+    String secret(String name) {
+        JsonNode node = field(name);
+        if (node == null || node.isNull()) {
+            if (bodyIsObject()) {
+                fail(name, "Invalid input: expected string, received undefined");
+            }
+            return "";
+        }
+        if (!node.isTextual()) {
+            fail(name, "Invalid input: expected string");
+            return "";
+        }
+        if (node.asText().isEmpty()) {
+            fail(name, "Too small: expected string to have at least 1 character");
+        }
+        return node.asText();
+    }
+
+    /** An optional string equal to the name of one of the constants. Null when absent. */
+    <E extends Enum<E>> E optionalEnum(String name, Class<E> type) {
+        JsonNode node = field(name);
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            for (E constant : type.getEnumConstants()) {
+                if (constant.name().equals(node.asText())) {
+                    return constant;
+                }
+            }
+        }
+        fail(name, "Invalid option: expected one of " + options(type));
+        return null;
+    }
+
+    /** An optional calendar date such as 2026-12-31. Null when absent. */
+    LocalDate optionalDate(String name) {
+        JsonNode node = field(name);
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isTextual()) {
+            fail(name, "Invalid input: expected string");
+            return null;
+        }
+        try {
+            return LocalDate.parse(node.asText());
+        } catch (DateTimeParseException e) {
+            fail(name, "Must be a date such as 2026-12-31");
             return null;
         }
     }

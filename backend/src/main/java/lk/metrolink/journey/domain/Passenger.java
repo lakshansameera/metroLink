@@ -33,4 +33,9 @@ public class Passenger {
     public Account openAccount(long accountId) {
         return residency.openAccount(accountId, passengerId);
     }
+
+    /** The same passenger with the id the store gave it. A new passenger starts with id 0. */
+    public Passenger withId(long newPassengerId) {
+        return new Passenger(newPassengerId, name, email, residency);
+    }
 }

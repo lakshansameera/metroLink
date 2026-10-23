@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from './api';
 import { JourneyList } from './components/JourneyList';
+import { Onboarding } from './components/Onboarding';
 import { PassengerList } from './components/PassengerList';
 import { ReaderGlass } from './components/ReaderGlass';
 import { RouteLine } from './components/RouteLine';
 import { TicketList } from './components/TicketList';
 import type { Direction, Journey, Passenger, ReaderDisplay, Reference, Ticket } from './types';
 
+type View = 'reader' | 'onboarding';
+
+const heading: Record<View, { title: string; line: string }> = {
+  reader: { title: 'MetroLink reader', line: 'Tap in, tap out, and see what the reader decides.' },
+  onboarding: { title: 'MetroLink customers', line: 'Open an account, or log in to the one you have.' },
+};
+
 export function App() {
+  const [view, setView] = useState<View>('reader');
+  /** Changes on every reset, so the sign-up screen starts empty again. */
+  const [startOver, setStartOver] = useState(0);
   const [reference, setReference] = useState<Reference | null>(null);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -84,6 +95,7 @@ export function App() {
   const reset = () =>
     run(async () => {
       await api.reset();
+      setStartOver((n) => n + 1);
       setResult(null);
       setToken('');
       setStopId('S1');
@@ -92,11 +104,23 @@ export function App() {
   return (
     <>
       <header className="masthead">
-        <h1>MetroLink reader</h1>
-        <p>Tap in, tap out, and see what the reader decides.</p>
+        <h1>{heading[view].title}</h1>
+        <p>{heading[view].line}</p>
         <button type="button" className="quiet" disabled={busy} onClick={reset}>
           Start over with demo data
         </button>
+        <nav className="views" aria-label="Screens">
+          <button type="button" aria-current={view === 'reader' ? 'page' : undefined} onClick={() => setView('reader')}>
+            Reader
+          </button>
+          <button
+            type="button"
+            aria-current={view === 'onboarding' ? 'page' : undefined}
+            onClick={() => setView('onboarding')}
+          >
+            New customer
+          </button>
+        </nav>
       </header>
 
       {error && (
@@ -107,6 +131,8 @@ export function App() {
 
       {!reference ? (
         <p className="loading">{error ? '' : 'Loading the network.'}</p>
+      ) : view === 'onboarding' ? (
+        <Onboarding key={startOver} passengers={passengers} onChanged={refresh} onTopUp={topUp} busy={busy} />
       ) : (
         <main className="shell">
           <div className="area-tickets">

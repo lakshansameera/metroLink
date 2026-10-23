@@ -20,6 +20,11 @@ public class PermanentAccount extends Account{
 
     @Override
     public Account copy() {
-        return new PermanentAccount(getBalance(), getPassengerId(), getAccountId());
+        return withId(getAccountId());
+    }
+
+    @Override
+    public Account withId(long newAccountId) {
+        return new PermanentAccount(getBalance(), getPassengerId(), newAccountId);
     }
 }

@@ -2,6 +2,8 @@
 
 Alerts are not part of this function (they belong to Monitor Credit Alerts). Going past the planned stop is only a flag on the result.
 
+Sections 1 to 7 describe Journey Execution. Section 8 describes Customer onboarding, which was added later and reuses the same layers.
+
 ## 1. Domain model
 
 Only the classes this sequence touches.
@@ -62,6 +64,7 @@ The whole function is one endpoint, `POST /api/reader/scan`. The others only fee
 | `GET /api/passengers`, `/passengers/{id}/account` | Passengers with balances; one account with its transactions | Display |
 | `GET /api/tickets`, `/journeys`, `/journeys/{id}` | Lists for the screen | Display |
 | `POST /api/test-data/credit`, `/reset` | Stand-in for Top Up; restore the demo data | Demo |
+| `POST /api/onboarding/register`, `/login` | Register a customer and open the account; check a login | Customer onboarding (section 8) |
 | `GET /api/health` | Is the server up | Smoke check |
 
 Request:
@@ -93,9 +96,11 @@ Status codes:
 | Code | When |
 |---|---|
 | 200 | Any business result, including a refused ticket (`outcome: REJECTED`). A rejection is an answer, not an error. |
-| 400 | Malformed request. Body: `{ "error": "VALIDATION", "message": "...", "details": [...] }` |
+| 201 | A customer was registered |
+| 400 | Malformed request. Body: `{ "error": "VALIDATION", "message": "...", "details": [...] }`. A registration with wrong fields lists them all in `details`. |
+| 401 | `INVALID_LOGIN`: a wrong password or an unknown email (the same answer for both) |
 | 404 | Unknown stop, journey or passenger |
-| 409 | Illegal state change, or the store refused the data (constraint violation) |
+| 409 | Illegal state change, the store refused the data (constraint violation), or `EMAIL_TAKEN` |
 | 422 | The account has expired, so it cannot be changed |
 | 500 | Bugs only |
 
@@ -141,5 +146,61 @@ The payoff: when a fare is wrong, I look in `fare`, never in the browser.
 | **Static factory** | `Journey.start`, `FareRule.distance/flat`, `FareTransaction.forJourney`, `TicketCheck.ok/refused` | Names say what is being made; a refused ticket is an answer, not an exception (decision 6). | 3a to 3d |
 | **Builder** | `ScanResult.Builder` | A scan result has many optional parts. | 3d |
 | **Composition root** | `Container` | The only place that knows which store is in use. | 3e |
+| **Simple factory** | `OnboardingRequest.residency()` | The request turns "RESIDENT" or "NON_RESIDENT" plus a date into the right `Residency` object once, so no caller writes `if (resident)`. | 8 |
+| **Facade** | `OnboardingService` (the "AuthSystem" in the sequence diagram) | The web layer calls `register` and `login` and knows nothing about hashing, ids or accounts. | 8 |
+| **Immutable value object** | `PasswordHash`, `OnboardingRequest` | A hash cannot be changed after it is made; a request is checked, never edited. | 8 |
 
 State and Strategy look the same in UML (an interface plus implementations) but differ in intent. In Strategy the caller picks the algorithm and it does not change. In State the object changes its own behaviour as events happen, and each state decides the next one.
+
+## 8. Customer onboarding
+
+This is the "New user - Registration" and "Existing user - Login" part of the Top Up Credit sequence diagram. The rest of Top Up Credit (choosing an amount, paying, adding the credit) is another function. `POST /api/test-data/credit` still stands in for it.
+
+### The sequence, message by message
+
+| Message in the diagram | Where it is in the code |
+|---|---|
+| `register(name, email, password)` | `POST /api/onboarding/register`, then `OnboardingService.register` |
+| `createUser(name, email, password)` | `PassengerRepository.insert` and `CredentialRepository.insert`. The password is hashed first. |
+| `createAccount(userId, initialCredit = 0)` | `AccountRepository.insert(passenger.openAccount(0))`. The residency decides the kind (rules A1, O3). |
+| `registrationSuccess(userId)` | `AuthResult`: the user id, one sentence to show, and the customer |
+| `login(credentials)`, `validateCredentials` | `POST /api/onboarding/login`, then `OnboardingService.login` |
+| `loginSuccess(userId)` | `AuthResult` |
+| `loginFailed()` | `DomainException` with code `INVALID_LOGIN`, HTTP 401 |
+
+### What registration does
+
+1. The request is checked by `OnboardingRequest.problems(today)`. Every wrong field is collected, and if there are any, nothing is created (rules O1, O3).
+2. The password is hashed with PBKDF2 (rule O6). This is slow on purpose, so it is done before the lock is taken and never holds up other requests.
+3. One unit of work (rule O5) checks the email is free (O2), inserts the passenger, inserts the password hash and inserts a permanent or temporary account with LKR 0 (O3, O4). If any step fails, all are undone, including the ids that were handed out.
+4. The answer is built from the same `QueryService` the passenger list uses, so the new customer is in the list at once (O9).
+
+### Data added
+
+| Item | Detail |
+|---|---|
+| `credentials` table | passenger id to password hash. Kept apart from `Passenger`, so a passenger is never accidentally sent anywhere with a hash attached. One row per passenger, and the passenger must exist. |
+| Unique email | Compared without case and without surrounding spaces. Both the service and the store refuse a copy. |
+| One account per passenger | The store refuses a second account for the same passenger. |
+| Id counters | Passengers and accounts get the next free number. Demo data uses 1 to 5, so the first new customer is 6. |
+| `ResidencyKind` | `RESIDENT` or `NON_RESIDENT`: what the form sends. `Residency` is still the object that opens the account. |
+
+### Decisions
+
+1. **The password is never stored.** Only `iterations:salt:hash` (PBKDF2 with HMAC-SHA256, a 16-byte random salt, 120,000 repeats). The hash remembers its own number of repeats, so the default can be raised later without breaking old hashes. This uses only the JDK, so no new dependency.
+2. **Wrong password and unknown email look the same** (rule O8): the same status, code and message. A login for an unknown email still runs one hash check, against a hash nobody can match, so for customers who registered through the form the two cases also take about the same time. The demo customers have cheaper hashes, so their timing differs.
+3. **All problems at once.** A customer should not have to fix one field, submit, and then find the next.
+4. **The server decides, the browser displays** (decision 5 in section 6). The form has no rules of its own. It shows what the server says, field by field.
+5. **Demo customers have a password too.** All five use `Demo@1234`, with a cheap hash (1,000 repeats) so the server starts fast. New customers get the full 120,000.
+6. **Login only checks.** It returns the customer and does not create a session or token, because the diagram ends at `loginSuccess(userId)`.
+
+### Not built
+
+These are real gaps. They are listed so nobody assumes they exist.
+
+- **No session or token.** After logging in, nothing is remembered. No endpoint requires a login.
+- **No email check.** An email only has to look like an address. Nothing is sent to it.
+- **No lockout or rate limit.** Someone can try passwords as fast as the server answers.
+- **No HTTPS.** The server speaks plain HTTP, so a password crosses the network readable. Use HTTPS in front of a real deployment.
+- **No password change or reset.**
+- **Data is in memory.** Registered customers are lost when the server stops, like all other data.

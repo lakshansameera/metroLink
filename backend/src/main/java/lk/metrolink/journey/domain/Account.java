@@ -26,7 +26,10 @@ public abstract class Account {
     }
 
     public abstract Account copy();
-    
+
+    /** The same account (same kind, same balance) with the id the store gave it. A new account starts with id 0. */
+    public abstract Account withId(long newAccountId);
+
     public abstract String type();
 
     public abstract boolean isUsableAt(Instant at);

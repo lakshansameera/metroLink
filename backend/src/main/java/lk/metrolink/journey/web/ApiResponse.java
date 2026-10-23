@@ -14,6 +14,11 @@ public final class ApiResponse {
         return new ApiResponse(200, body);
     }
 
+    /** Something new was made, for example a registered customer. */
+    public static ApiResponse created(Object body) {
+        return new ApiResponse(201, body);
+    }
+
     public int status() { return status; }
     public Object body() { return body; }
 }

@@ -26,6 +26,24 @@ public final class InMemoryAccountRepository implements AccountRepository {
     }
 
     @Override
+    public Account insert(Account draft) {
+        InMemoryDatabase.Tables t = db.tables();
+        if (!t.passengers.containsKey(draft.getPassengerId())) {
+            throw new ConstraintViolationException("accounts: FOREIGN KEY passenger_id failed");
+        }
+        if (t.accounts.values().stream().anyMatch(a -> a.getPassengerId() == draft.getPassengerId())) {
+            throw new ConstraintViolationException(
+                    "accounts: UNIQUE passenger_id failed (" + draft.getPassengerId() + ")");
+        }
+        if (draft.getBalance() < 0) {
+            throw new ConstraintViolationException("accounts: CHECK balance >= 0 failed");
+        }
+        Account stored = draft.withId(t.nextAccountId++);
+        t.accounts.put(stored.getAccountId(), stored);
+        return stored.copy();
+    }
+
+    @Override
     public void save(Account account) {
         InMemoryDatabase.Tables t = db.tables();
         if (!t.accounts.containsKey(account.getAccountId())) {

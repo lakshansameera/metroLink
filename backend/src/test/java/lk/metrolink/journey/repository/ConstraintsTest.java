@@ -9,13 +9,20 @@ import java.time.LocalDate;
 import lk.metrolink.journey.domain.Account;
 import lk.metrolink.journey.domain.FareTransaction;
 import lk.metrolink.journey.domain.Journey;
+import lk.metrolink.journey.domain.NonResident;
+import lk.metrolink.journey.domain.Passenger;
+import lk.metrolink.journey.domain.PasswordHash;
 import lk.metrolink.journey.domain.PermanentAccount;
 import lk.metrolink.journey.domain.QRTicket;
+import lk.metrolink.journey.domain.Resident;
+import lk.metrolink.journey.domain.TemporaryAccount;
 import lk.metrolink.journey.domain.TicketState;
 import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
+import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
 import lk.metrolink.journey.repository.memory.InMemoryDatabase;
 import lk.metrolink.journey.repository.memory.InMemoryFareTransactionRepository;
 import lk.metrolink.journey.repository.memory.InMemoryJourneyRepository;
+import lk.metrolink.journey.repository.memory.InMemoryPassengerRepository;
 import lk.metrolink.journey.repository.memory.InMemoryTicketRepository;
 import org.junit.Before;
 import org.junit.Test;
@@ -142,5 +149,72 @@ public class ConstraintsTest {
 
         assertEquals(69, found.getAmount());
         assertEquals(431, found.getBalanceAfter());
+    }
+
+
+    // ---- onboarding: new customers, passwords and accounts (O2, O5, O6)
+
+    private PassengerRepository passengers() {
+        return new InMemoryPassengerRepository(db);
+    }
+
+    private CredentialRepository credentials() {
+        return new InMemoryCredentialRepository(db);
+    }
+
+    @Test
+    public void twoPassengersCannotShareAnEmail() {
+        expectRefused(() -> passengers().insert(new Passenger(0, "Copy", "nimal@example.com", new Resident())));
+    }
+
+    @Test
+    public void theEmailUniquenessIgnoresCase() {
+        expectRefused(() -> passengers().insert(new Passenger(0, "Copy", "NIMAL@Example.com", new Resident())));
+    }
+
+    @Test
+    public void aNewPassengerGetsTheNextIdAndIsReadable() {
+        Passenger stored = db.run(() -> passengers().insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
+
+        assertEquals(6, stored.getPassengerId());
+        assertEquals("Amaya", db.run(() -> passengers().find(6)).orElseThrow().getName());
+    }
+
+    @Test
+    public void anAccountForAnUnknownPassengerIsRefused() {
+        expectRefused(() -> accounts.insert(new PermanentAccount(0, 99, 0)));
+    }
+
+    @Test
+    public void aPassengerCannotHaveTwoAccounts() {
+        expectRefused(() -> accounts.insert(new PermanentAccount(0, 1, 0)));
+    }
+
+    @Test
+    public void aNewAccountWithANegativeBalanceIsRefused() {
+        db.execute(() -> passengers().insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
+
+        expectRefused(() -> accounts.insert(new PermanentAccount(-5, 6, 0)));
+    }
+
+    @Test
+    public void aNewAccountGetsTheNextIdAndKeepsItsKind() {
+        db.execute(() -> passengers().insert(new Passenger(0, "Emma", "emma.w@example.com",
+                new NonResident(TODAY.plusDays(30)))));
+
+        Account stored = db.run(() -> accounts.insert(new TemporaryAccount(0, 6, 0, TODAY.plusDays(30))));
+
+        assertEquals(6, stored.getAccountId());
+        assertEquals("TEMPORARY", stored.type());
+    }
+
+    @Test
+    public void aPasswordForAnUnknownPassengerIsRefused() {
+        expectRefused(() -> credentials().insert(99, PasswordHash.of("Sunny day 42", 1_000)));
+    }
+
+    @Test
+    public void aPassengerCannotHaveTwoPasswords() {
+        expectRefused(() -> credentials().insert(1, PasswordHash.of("Sunny day 42", 1_000)));
     }
 }

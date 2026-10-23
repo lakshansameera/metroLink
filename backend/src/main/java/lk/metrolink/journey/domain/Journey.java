@@ -41,6 +41,14 @@ public class Journey {
         return state.isOpen();
     }
 
+    public boolean isSettled() {
+        return state.isSettled();
+    }
+
+    public boolean isAwaitingPayment() {
+        return state.isAwaitingPayment();
+    }
+
     public void recordExit(String exitStopId, Instant tapOutTime, long fareDue) {
         state = state.recordExit(journeyId);
         this.exitStopId = exitStopId;

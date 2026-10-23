@@ -1,122 +1,143 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { api, ApiError } from './api';
+import { JourneyList } from './components/JourneyList';
+import { PassengerList } from './components/PassengerList';
+import { ReaderGlass } from './components/ReaderGlass';
+import { RouteLine } from './components/RouteLine';
+import { TicketList } from './components/TicketList';
+import type { Direction, Journey, Passenger, ReaderDisplay, Reference, Ticket } from './types';
 
-function App() {
-  const [count, setCount] = useState(0)
+export function App() {
+  const [reference, setReference] = useState<Reference | null>(null);
+  const [passengers, setPassengers] = useState<Passenger[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
+
+  const [token, setToken] = useState('');
+  const [stopId, setStopId] = useState('S1');
+  const [result, setResult] = useState<ReaderDisplay | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const [p, t, j] = await Promise.all([api.passengers(), api.tickets(), api.journeys()]);
+    setPassengers(p);
+    setTickets(t);
+    setJourneys(j);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [network, p, t, j] = await Promise.all([api.reference(), api.passengers(), api.tickets(), api.journeys()]);
+        if (cancelled) return;
+        setReference(network);
+        setPassengers(p);
+        setTickets(t);
+        setJourneys(j);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load the data.');
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const ticket = useMemo(() => tickets.find((t) => t.qrCode === token), [tickets, token]);
+  const journey = useMemo(() => journeys.find((j) => j.ticketId === ticket?.ticketId), [journeys, ticket]);
+  const stopName = reference?.stops.find((s) => s.stopId === stopId)?.name ?? stopId;
+
+  /** Runs an action, then reloads what the server holds, and shows any error the server explained. */
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function pick(t: Ticket) {
+    setToken(t.qrCode);
+    setResult(null);
+    const j = journeys.find((x) => x.ticketId === t.ticketId);
+    // A passenger already on the train taps out at the planned stop next. Anyone else taps in where the ticket starts.
+    setStopId(j && j.status !== 'COMPLETED' ? t.plannedDestinationStopId : t.boardingStopId);
+  }
+
+  const tap = (direction: Direction) =>
+    run(async () => {
+      const shown = await api.scan(token, direction, stopId);
+      setResult(shown);
+      if (shown.outcome === 'JOURNEY_STARTED' && shown.ticket) setStopId(shown.ticket.plannedDestinationStopId);
+    });
+
+  const settle = (journeyId: number) => run(async () => setResult(await api.settle(journeyId)));
+  const topUp = (passengerId: number, amount: number) => run(async () => void (await api.addCredit(passengerId, amount)));
+  const reset = () =>
+    run(async () => {
+      await api.reset();
+      setResult(null);
+      setToken('');
+      setStopId('S1');
+    });
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
+      <header className="masthead">
+        <h1>MetroLink reader</h1>
+        <p>Tap in, tap out, and see what the reader decides.</p>
+        <button type="button" className="quiet" disabled={busy} onClick={reset}>
+          Start over with demo data
         </button>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
+      {error && (
+        <p className="banner" role="alert">
+          {error}
+        </p>
+      )}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      {!reference ? (
+        <p className="loading">{error ? '' : 'Loading the network.'}</p>
+      ) : (
+        <main className="shell">
+          <div className="area-tickets">
+            <TicketList tickets={tickets} journeys={journeys} selected={token} onSelect={pick} />
+          </div>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+          <div className="area-line">
+            <RouteLine reference={reference} ticket={ticket} journey={journey} stopId={stopId} onStop={setStopId} />
+            <div className="taps">
+              <button type="button" className="tap tap-in" disabled={busy || !token} onClick={() => tap('IN')}>
+                Tap in at {stopName}
+              </button>
+              <button type="button" className="tap tap-out" disabled={busy || !token} onClick={() => tap('OUT')}>
+                Tap out at {stopName}
+              </button>
+            </div>
+            {!token && <p className="hint">Choose a ticket first.</p>}
+          </div>
+
+          <div className="area-glass">
+            <ReaderGlass result={result} busy={busy} />
+          </div>
+
+          <div className="area-people">
+            <PassengerList passengers={passengers} onTopUp={topUp} busy={busy} />
+          </div>
+          <div className="area-journeys">
+            <JourneyList journeys={journeys} onSettle={settle} busy={busy} />
+          </div>
+        </main>
+      )}
     </>
-  )
+  );
 }
-
-export default App

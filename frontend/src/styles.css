@@ -1,0 +1,537 @@
+/* MetroLink reader. Platform-sign look: flat panels under a heavy rule, one big coloured reader face. */
+
+:root {
+  --ground: #e6ecef;
+  --panel: #f8fafb;
+  --ink: #13283b;
+  --ink-soft: #4a5f71;
+  --rule: #c3cfd8;
+  --line: #0b6e99;
+  --line-tint: #dcecf4;
+  --go: #16794f;
+  --wait: #f0b429;
+  --wait-ink: #1d1600;
+  --stop: #b3342c;
+  --glass-idle: #13283b;
+  --focus: #0b6e99;
+
+  --signage: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
+  --body: 'Barlow', system-ui, 'Segoe UI', sans-serif;
+
+  color-scheme: light dark;
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0b1620;
+    --panel: #13232f;
+    --ink: #e4edf3;
+    --ink-soft: #9db3c3;
+    --rule: #2b4152;
+    --line: #4fb5e3;
+    --line-tint: #17394b;
+    --glass-idle: #1b3347;
+    --focus: #4fb5e3;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+}
+
+h1,
+h2 {
+  font-family: var(--signage);
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.005em;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  align-items: end;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 1rem;
+}
+
+.masthead h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+}
+
+.masthead p {
+  grid-column: 1;
+  color: var(--ink-soft);
+}
+
+.masthead button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: end;
+}
+
+.banner {
+  max-width: 76rem;
+  margin: 0 auto 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--stop);
+  color: #fff;
+  font-weight: 600;
+}
+
+.loading {
+  max-width: 76rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  color: var(--ink-soft);
+}
+
+/* ---------- layout ---------- */
+
+.shell {
+  display: grid;
+  gap: 1rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'tickets'
+    'line'
+    'glass'
+    'people'
+    'journeys';
+}
+
+.area-tickets { grid-area: tickets; }
+.area-line { grid-area: line; }
+.area-glass { grid-area: glass; }
+.area-people { grid-area: people; }
+.area-journeys { grid-area: journeys; }
+
+@media (min-width: 60rem) {
+  .shell {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-areas:
+      'tickets glass'
+      'line glass'
+      'people journeys';
+    align-items: start;
+  }
+
+  .area-glass {
+    position: sticky;
+    top: 1rem;
+    grid-row: 1 / span 2;
+  }
+}
+
+.panel {
+  background: var(--panel);
+  border-top: 4px solid var(--ink);
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.quiet {
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--rule);
+  border-radius: 8px;
+  padding: 0.35rem 0.8rem;
+  font-weight: 600;
+}
+
+.quiet:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.empty,
+.hint {
+  color: var(--ink-soft);
+}
+
+.hint {
+  margin-top: 0.5rem;
+}
+
+/* ---------- tickets ---------- */
+
+.tickets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 22rem;
+  overflow-y: auto;
+  border-top: 1px solid var(--rule);
+}
+
+.ticket {
+  display: grid;
+  grid-template-columns: 1fr 8.5rem;
+  gap: 0 1rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-left: 4px solid transparent;
+}
+
+.ticket:hover {
+  background: var(--line-tint);
+}
+
+.ticket[aria-pressed='true'] {
+  background: var(--line-tint);
+  border-left-color: var(--line);
+}
+
+.ticket-trip {
+  font-family: var(--signage);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.ticket-fare {
+  text-align: right;
+  font-family: var(--signage);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-who,
+.ticket-note {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.ticket-note {
+  text-align: right;
+}
+
+/* ---------- the line ---------- */
+
+.line {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.line li {
+  position: relative;
+}
+
+.line li::before {
+  content: '';
+  position: absolute;
+  left: 0.6rem;
+  width: 0.3rem;
+  top: 0;
+  bottom: 0;
+  background: var(--line);
+}
+
+.line li:first-child::before {
+  top: 50%;
+}
+
+.line li:last-child::before {
+  bottom: 50%;
+}
+
+.line li.off-route::before {
+  background: var(--rule);
+}
+
+.stop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.5rem 1fr auto;
+  align-items: center;
+  gap: 0.15rem 0.75rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 8px;
+}
+
+.stop:hover {
+  background: var(--line-tint);
+}
+
+.stop-dot {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 0.3rem solid var(--line);
+}
+
+.off-route .stop-dot {
+  border-color: var(--rule);
+}
+
+.stop[aria-pressed='true'] .stop-dot {
+  background: var(--ink);
+  box-shadow: 0 0 0 4px var(--line-tint), 0 0 0 7px var(--ink);
+}
+
+.stop-name {
+  font-family: var(--signage);
+  font-weight: 600;
+  font-size: 1.2rem;
+}
+
+.stop[aria-pressed='true'] .stop-name {
+  font-weight: 700;
+}
+
+.stop-km {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.stop-mark {
+  grid-column: 2 / span 2;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.taps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.tap {
+  padding: 1rem 0.75rem;
+  border: 0;
+  border-radius: 12px;
+  font-family: var(--signage);
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.tap-in {
+  background: var(--line);
+}
+
+.tap-out {
+  background: var(--ink);
+  color: var(--panel);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tap-in {
+    color: #06222f;
+  }
+}
+
+.area-line .panel {
+  margin-bottom: 0;
+}
+
+/* ---------- the reader face ---------- */
+
+.glass {
+  border-radius: 18px;
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+  min-height: 20rem;
+  color: #fff;
+  background: var(--glass-idle);
+  transition: background-color 0.25s ease;
+}
+
+.glass h2 {
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  line-height: 1;
+  margin-bottom: 1rem;
+}
+
+.glass-message {
+  font-size: 1.4rem;
+  line-height: 1.3;
+  max-width: 28rem;
+}
+
+.glass-idle .glass-message {
+  opacity: 0.8;
+  font-size: 1.15rem;
+}
+
+.glass-success {
+  background: var(--go);
+}
+
+.glass-warning {
+  background: var(--wait);
+  color: var(--wait-ink);
+}
+
+.glass-error {
+  background: var(--stop);
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 1.5rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 2px solid currentColor;
+}
+
+.figures dt {
+  font-size: 0.9375rem;
+  opacity: 0.85;
+}
+
+.figures dd {
+  margin: 0;
+  font-family: var(--signage);
+  font-weight: 700;
+  font-size: 1.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.glass-ticket {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  font-size: 0.9375rem;
+  opacity: 0.85;
+}
+
+/* ---------- passengers ---------- */
+
+.people,
+.journeys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.people li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.person {
+  display: grid;
+  flex: 1 1 11rem;
+}
+
+.person-account {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.balance {
+  font-family: var(--signage);
+  font-weight: 700;
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.5rem;
+}
+
+/* ---------- journeys ---------- */
+
+.journey {
+  padding: 0.7rem 0 0.8rem 0.75rem;
+  border-bottom: 1px solid var(--rule);
+  border-left: 4px solid var(--rule);
+}
+
+.journey-completed { border-left-color: var(--go); }
+.journey-payment_pending { border-left-color: var(--wait); }
+.journey-in_progress { border-left-color: var(--line); }
+
+.journey-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.journey-status {
+  font-weight: 600;
+}
+
+.journey-trip {
+  font-family: var(--signage);
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+
+.journey-meta {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.journey button {
+  margin-top: 0.5rem;
+  padding: 0.45rem 1rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass {
+    transition: none;
+  }
+}

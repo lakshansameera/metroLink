@@ -7,6 +7,11 @@ public class PaymentPendingState implements JourneyState {
     }
 
     @Override
+    public boolean isAwaitingPayment() {
+        return true;
+    }
+
+    @Override
     public JourneyState complete(long journeyId) {
         return new CompletedState();
     }

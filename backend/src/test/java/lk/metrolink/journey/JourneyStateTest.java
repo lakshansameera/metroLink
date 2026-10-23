@@ -49,6 +49,17 @@ public class JourneyStateTest {
     }
 
     @Test
+    public void onlyACompletedJourneyIsSettledAndOnlyAPendingOneAwaitsPayment() {
+        assertTrue(new CompletedState().isSettled());
+        assertFalse(new InProgressState().isSettled());
+        assertFalse(new PaymentPendingState().isSettled());
+
+        assertTrue(new PaymentPendingState().isAwaitingPayment());
+        assertFalse(new InProgressState().isAwaitingPayment());
+        assertFalse(new CompletedState().isAwaitingPayment());
+    }
+
+    @Test
     public void theErrorNamesTheJourneyTheStatusAndTheMove() {
         DomainException e = assertThrows(DomainException.class, () -> new CompletedState().complete(7));
 

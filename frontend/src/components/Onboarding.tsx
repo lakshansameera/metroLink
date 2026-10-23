@@ -344,7 +344,7 @@ function Welcome({ outcome }: { outcome: { kind: 'registered' | 'loggedIn'; resu
           <dd>{lkr(customer.balance)}</dd>
         </div>
         {temporary && customer.visaExpiry && (
-          <div>
+          <div className="figure-wide">
             <dt>Works until</dt>
             <dd>{dayOf(customer.visaExpiry)}</dd>
           </div>

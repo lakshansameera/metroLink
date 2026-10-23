@@ -606,6 +606,11 @@ button:disabled {
   min-height: 15rem;
 }
 
+/* A figure with a long value (a date) gets a whole row, so it never wraps onto two lines. */
+.figures .figure-wide {
+  grid-column: 1 / -1;
+}
+
 .field {
   display: grid;
   gap: 0.3rem;

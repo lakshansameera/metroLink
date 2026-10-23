@@ -1,6 +1,7 @@
-import { lkr, outcomeLabel } from '../format';
+import { lkr, outcomeLabel, signedLkr } from '../format';
 import type { ReaderDisplay } from '../types';
 import { StateBadge } from './StateBadge';
+import { TripBadges } from './TripBadges';
 
 interface Props {
   result: ReaderDisplay | null;
@@ -18,12 +19,17 @@ export function ReaderGlass({ result, busy }: Props) {
     );
   }
 
-  const figures: [string, number | undefined][] = [
-    ['Trip needs', result.fare.required],
-    ['Fare', result.fare.due],
-    ['Charged', result.fare.charged],
-    ['Still owed', result.fare.shortfall],
-    ['Balance', result.fare.balance],
+  const trip = result.journey?.trip;
+  // The ticket's own fare is shown only when the trip was not as ticketed, so a normal trip shows no extra figures.
+  const offTicket = trip !== undefined && trip.fareDifference !== null && (trip.kind !== 'AS_TICKETED' || trip.fareDifference !== 0);
+  const figures: [string, string | undefined][] = [
+    ['Trip needs', result.fare.required === undefined ? undefined : lkr(result.fare.required)],
+    ['Fare', result.fare.due === undefined ? undefined : lkr(result.fare.due)],
+    ['Ticket fare', offTicket ? lkr(trip!.quotedFare) : undefined],
+    ['Against ticket', offTicket ? signedLkr(trip!.fareDifference!) : undefined],
+    ['Charged', result.fare.charged === undefined ? undefined : lkr(result.fare.charged)],
+    ['Still owed', result.fare.shortfall === undefined ? undefined : lkr(result.fare.shortfall)],
+    ['Balance', result.fare.balance === undefined ? undefined : lkr(result.fare.balance)],
   ];
   const shown = figures.filter(([, value]) => value !== undefined);
 
@@ -37,7 +43,7 @@ export function ReaderGlass({ result, busy }: Props) {
           {shown.map(([label, value]) => (
             <div key={label}>
               <dt>{label}</dt>
-              <dd>{lkr(value)}</dd>
+              <dd>{value}</dd>
             </div>
           ))}
         </dl>
@@ -50,6 +56,7 @@ export function ReaderGlass({ result, busy }: Props) {
           <span className="glass-states">
             <StateBadge kind="Ticket" state={result.ticket.status} />
             {result.journey && <StateBadge kind="Journey" state={result.journey.status} />}
+            {trip && <TripBadges trip={trip} />}
           </span>
         </p>
       )}

@@ -11,6 +11,7 @@ import lk.metrolink.journey.domain.Journey;
 import lk.metrolink.journey.domain.NotFoundException;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Route;
+import lk.metrolink.journey.domain.TripComparison;
 import lk.metrolink.journey.fare.FareCalculator;
 import lk.metrolink.journey.fare.FareQuote;
 import lk.metrolink.journey.log.Log;
@@ -103,11 +104,21 @@ public final class JourneyService {
 
         Journey journey = journeys.insert(
                 Journey.start(ticket.getTicketId(), ticket.getRouteNo(), scan.getStopId(), at));   // B6
+
+        // Tapping in at a stop other than the one on the ticket is allowed (B4 only needs it to be before the
+        // planned stop), but it is noted, because it changes what the trip will cost (X9).
+        TripComparison trip = TripComparison.of(route, ticket, scan.getStopId(), null);
+        if (trip.boardedOffTicket()) {
+            Log.info(Log.SERVICE, "JourneyService.board: ticket %s was bought for stop %s but the passenger tapped in "
+                    + "at %s (%s)", ticket.getQrCode(), ticket.getBoardingStopId(), scan.getStopId(),
+                    trip.summary(null));
+        }
         return ScanResult.of(ScanOutcome.JOURNEY_STARTED)
                 .journey(journey)
                 .ticket(ticket)
                 .required(planned.getAmount())
                 .balance(account.getBalance())
+                .trip(trip.boardedOffTicket() ? trip : null)
                 .build();
     }
 
@@ -156,7 +167,7 @@ public final class JourneyService {
         }
         if (journey.isAwaitingPayment()) {
             // Scanning out again is a retry of the fare that was already worked out.
-            return attemptSettlement(journey, ticket, at, false);
+            return attemptSettlement(journey, ticket, tripOf(journey, ticket), at);
         }
 
         Route route = requireRoute(journey.getRouteNo());
@@ -181,8 +192,12 @@ public final class JourneyService {
         journey.recordExit(scan.getStopId(), at, quote.getAmount());
         journeys.save(journey);
 
-        boolean overtravelled = route.isBefore(ticket.getPlannedDestinationStopId(), scan.getStopId());   // X7
-        return attemptSettlement(journey, ticket, at, overtravelled);
+        // The fare above was priced from where the passenger really boarded to where they really got off (X3).
+        // Now put that trip next to the ticket: over-travel (X7), a different fare to the ticket's (X9, X10).
+        TripComparison trip = TripComparison.of(route, ticket, journey.getBoardingStopId(), scan.getStopId());
+        Log.info(Log.SERVICE, "JourneyService.alight: the trip compared with the ticket %s: %s", ticket.getQrCode(),
+                trip.summary(quote.getAmount()));
+        return attemptSettlement(journey, ticket, trip, at);
     }
 
     // ------------------------------------------------------------------ settling
@@ -202,7 +217,7 @@ public final class JourneyService {
                 throw new DomainException("Journey " + journeyId + " has not ended yet; scan out before settling",
                         "ILLEGAL_TRANSITION", 409);
             }
-            ScanResult result = attemptSettlement(journey, ticket, at, false);
+            ScanResult result = attemptSettlement(journey, ticket, tripOf(journey, ticket), at);
             Log.info(Log.SERVICE, "JourneyService.settle: %s", result.summary());
             return result;
         });
@@ -212,7 +227,7 @@ public final class JourneyService {
      * Shared by the exit scan (first try) and settle (later tries).
      * Can pay: one debit, journey COMPLETED, ticket USED. Cannot pay: nothing moves, journey PAYMENT_PENDING.
      */
-    private ScanResult attemptSettlement(Journey journey, QRTicket ticket, Instant at, boolean overtravelled) {
+    private ScanResult attemptSettlement(Journey journey, QRTicket ticket, TripComparison trip, Instant at) {
         long fareDue = journey.getFareDue();
         Account account = accountService.requireForPassenger(ticket.getPassengerId());
         Optional<FareTransaction> alreadyDebited = accountService.findFareTransaction(journey.getJourneyId());
@@ -232,7 +247,7 @@ public final class JourneyService {
                     .fareDue(fareDue)
                     .fareCharged(debit.getAmount())
                     .balance(debit.getBalanceAfter())
-                    .overtravelled(overtravelled)
+                    .trip(trip)
                     .build();
         }
 
@@ -246,7 +261,7 @@ public final class JourneyService {
                 .ticket(ticket)
                 .fareDue(fareDue)
                 .balance(account.getBalance())
-                .overtravelled(overtravelled);
+                .trip(trip);
         if (!account.isUsableAt(at)) {
             return waiting.reason(RejectionReason.ACCOUNT_EXPIRED).build();
         }
@@ -260,6 +275,12 @@ public final class JourneyService {
                 .fareDue(journey.getFareDue())
                 .fareCharged(journey.getFareCharged())
                 .build();
+    }
+
+    /** The comparison for a journey that has already ended, rebuilt from the stops it recorded. */
+    private TripComparison tripOf(Journey journey, QRTicket ticket) {
+        return TripComparison.of(requireRoute(journey.getRouteNo()), ticket, journey.getBoardingStopId(),
+                journey.getExitStopId());
     }
 
     private Route requireRoute(String routeNo) {

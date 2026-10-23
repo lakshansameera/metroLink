@@ -11,6 +11,24 @@ export const JOURNEY_STATUSES = ['IN_PROGRESS', 'PAYMENT_PENDING', 'COMPLETED'] 
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export type JourneyStatus = (typeof JOURNEY_STATUSES)[number];
 
+// How the real trip compares with the ticket, spelled as the server spells it: TripComparison.Kind in the backend.
+// FrontEndStatesTest fails if this list and the server's list ever differ.
+export const TRIP_KINDS = ['AS_TICKETED', 'SHORTER', 'OVER_TRAVEL'] as const;
+export type TripKind = (typeof TRIP_KINDS)[number];
+
+/** The real trip next to the ticket. The server works it all out; the screen only shows it. */
+export interface Trip {
+  /** Null while the passenger is still on the bus and has not yet gone outside the ticket. */
+  kind: TripKind | null;
+  boardedOffTicket: boolean;
+  exitedOffTicket: boolean;
+  /** The fare on the ticket. */
+  quotedFare: number;
+  /** Fare owed minus the ticket's fare: positive is more than the ticket, negative is less. Null until the exit. */
+  fareDifference: number | null;
+  overcharged: boolean;
+}
+
 export interface RouteStop {
   stopId: string;
   name: string;
@@ -75,6 +93,7 @@ export interface Journey {
   fareCharged: number | null;
   status: JourneyStatus;
   overtravelled: boolean;
+  trip: Trip;
 }
 
 export interface Fare {

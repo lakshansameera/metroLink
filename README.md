@@ -148,6 +148,19 @@ Each ticket and each journey shows its state exactly as the server names it, in 
 
 A ticket for another day stays `ACTIVE` (nothing expires it by itself), and the note under it says the reader refuses it for its date. The rules are V1 to V4 in `docs/rules.md`. A backend test (`FrontEndStatesTest`) reads `frontend/src/types.ts` and fails if its list of states and the server's ever differ.
 
+## When the trip is not the ticket's trip
+
+A ticket says "board at A, get off at B". The reader says where the passenger really tapped. The server puts the two side by side (`TripComparison`) and the screens show the answer. The fare is always for the stops really used, and the ticket's own fare is never rewritten.
+
+| What happened | Kind | What the reader and lists show |
+|---|---|---|
+| Tapped in and out at the ticket's stops | `AS_TICKETED` | nothing extra |
+| Tapped in at another stop (before the planned destination) | not decided until the exit | warning at tap-in: "Journey started at Maradana, not Colombo Fort as on your ticket." and a `Boarded off ticket` chip |
+| Got off after the planned stop, or boarded before the ticket's stop, or both | `OVER_TRAVEL` | `Over-travel` chip, "your ticket was A to B, you travelled C to D", and `Over-charged +LKR n` when the fare is above the ticket's |
+| Boarded later or got off earlier, inside the ticket's stretch | `SHORTER` | `Shorter trip` chip and "LKR n less than the ticket fare" |
+
+Try it with `MLK-HAPPY01` (ticket Colombo Fort to Kiribathgoda, LKR 69): tap in at `S2`, tap out at `S6`. The fare is for Maradana to Kadawatha (LKR 76), which is LKR 7 above the ticket. The console line says the same: `ticket S1 to S5, trip S2 to S6: OVER_TRAVEL, ... fare LKR 76 against the ticket's LKR 69 (LKR 7 more, over-charged)`. Over-travel and over-charged are flags beside the states. The journey is still `COMPLETED` (or `PAYMENT_PENDING` if the account cannot pay). The rules are X7, X9, X10 and V5 in `docs/rules.md`.
+
 ## Console logs
 
 The server writes what it is doing to the console, so you can watch the states change and see which class does what. It uses no logging library. Start it and tap a ticket in the Reader, and the console shows this (a real run, shortened):

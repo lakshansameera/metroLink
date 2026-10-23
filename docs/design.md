@@ -84,7 +84,11 @@ Response (shortened):
   "tone": "SUCCESS",
   "message": "Fare LKR 69 charged. Balance LKR 431.",
   "ticket": { "qrCode": "MLK-HAPPY01", "status": "USED" },
-  "journey": { "journeyId": 1, "status": "COMPLETED", "fareDue": 69, "fareCharged": 69, "overtravelled": false },
+  "journey": {
+    "journeyId": 1, "status": "COMPLETED", "fareDue": 69, "fareCharged": 69, "overtravelled": false,
+    "trip": { "kind": "AS_TICKETED", "boardedOffTicket": false, "exitedOffTicket": false,
+              "quotedFare": 69, "fareDifference": 0, "overcharged": false }
+  },
   "fare": { "due": 69, "charged": 69, "balance": 431 },
   "overtravelled": false
 }

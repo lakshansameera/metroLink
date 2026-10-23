@@ -877,3 +877,43 @@ button:disabled {
 
 .glass .state .state-kind { color: var(--ink-soft); opacity: 1; }
 .glass .state .state-name { color: var(--ink); }
+
+/* ---------- trip against the ticket: Over-travel, Shorter trip, Over-charged ---------- */
+
+.trip-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.trip-chip {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.trip-over { border-color: var(--stop); color: var(--bad-ink); background: transparent; }
+.trip-shorter { background: var(--line-tint); border-color: var(--line); color: var(--ink); }
+.trip-boarded { background: var(--wait); border-color: var(--wait); color: var(--wait-ink); }
+
+.journey-compare {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* On the reader face the colour already says how it went, so the chips sit on the panel colour like the states do. */
+.glass .trip-chip {
+  background: var(--panel);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.glass .trip-over { color: var(--bad-ink); }

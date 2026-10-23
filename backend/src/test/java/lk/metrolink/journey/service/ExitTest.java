@@ -15,6 +15,7 @@ import lk.metrolink.journey.domain.FareTransaction;
 import lk.metrolink.journey.domain.Journey;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.TicketState;
+import lk.metrolink.journey.domain.TripComparison;
 import lk.metrolink.journey.repository.FareTransactionRepository;
 import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.Before;
@@ -218,6 +219,64 @@ public class ExitTest extends OnEveryStore {
         f.in("MLK-OVERTR1", "S1", Fixture.MORNING);
 
         assertFalse(f.out("MLK-OVERTR1", "S4", Fixture.LATER).isOvertravelled());
+    }
+
+    @Test
+    public void exitingPastThePlannedStopAlsoSaysHowMuchMoreThanTheTicketTheFareIs() {            // X10
+        f.in("MLK-OVERTR1", "S1", Fixture.MORNING);                                              // ticket S1 to S4, LKR 54
+
+        ScanResult result = f.out("MLK-OVERTR1", "S5", Fixture.LATER);
+
+        assertEquals(TripComparison.Kind.OVER_TRAVEL, result.getTrip().kind());
+        assertEquals(Long.valueOf(15), result.getTrip().fareDifference(result.getFareDue()));
+        assertTrue(result.getTrip().isOverCharged(result.getFareDue()));
+        assertEquals("the ticket's own fare is not rewritten", 54, f.ticket("MLK-OVERTR1").getQuotedFare());
+    }
+
+    @Test
+    public void gettingOffBeforeThePlannedStopIsAShorterTripAndChargesLessThanTheTicket() {      // X10
+        f.in("MLK-HAPPY01", "S1", Fixture.MORNING);                                              // ticket S1 to S5, LKR 69
+
+        ScanResult result = f.out("MLK-HAPPY01", "S4", Fixture.LATER);
+
+        assertEquals(TripComparison.Kind.SHORTER, result.getTrip().kind());
+        assertFalse(result.isOvertravelled());
+        assertEquals("priced to S4, the stop actually used", Long.valueOf(54), result.getFareCharged());
+        assertEquals(Long.valueOf(-15), result.getTrip().fareDifference(result.getFareDue()));
+        assertEquals(446, f.balanceOf(1));
+    }
+
+    @Test
+    public void tappingInAtAnotherStopAndOutBeyondTheTicketIsPricedFromWhereTheyReallyBoarded() {  // X3, X9
+        f.in("MLK-HAPPY01", "S2", Fixture.MORNING);                                              // the ticket says S1 to S5
+
+        ScanResult result = f.out("MLK-HAPPY01", "S6", Fixture.LATER);
+
+        assertEquals(ScanOutcome.JOURNEY_COMPLETED, result.getOutcome());
+        assertEquals(TripComparison.Kind.OVER_TRAVEL, result.getTrip().kind());
+        assertTrue(result.getTrip().boardedOffTicket());
+        assertTrue(result.getTrip().exitedOffTicket());
+        assertTrue(result.isOvertravelled());
+        assertEquals("priced S2 to S6 (12.4 km), not the ticket's S1 to S5", Long.valueOf(76), result.getFareCharged());
+        assertEquals(Long.valueOf(7), result.getTrip().fareDifference(result.getFareDue()));
+        assertTrue(result.getTrip().isOverCharged(result.getFareDue()));
+        assertEquals("S2", f.journeyOf("MLK-HAPPY01").getBoardingStopId());
+        assertEquals("S6", f.journeyOf("MLK-HAPPY01").getExitStopId());
+        assertEquals("USED", f.ticket("MLK-HAPPY01").status());
+    }
+
+    @Test
+    public void aFareThatIsWaitingStillRemembersTheTripWhenItIsPaidLater() {                     // X7, D1
+        f.in("MLK-PENDING", "S1", Fixture.MORNING);                                              // ticket S1 to S3
+        f.out("MLK-PENDING", "S5", Fixture.LATER);                                               // owes 69, has 45
+        f.topUp(2, 100, Fixture.LATER);
+        long journeyId = f.journeyOf("MLK-PENDING").getJourneyId();
+
+        ScanResult paid = f.journeyService.settle(journeyId, Fixture.LATER);
+
+        assertEquals(ScanOutcome.JOURNEY_COMPLETED, paid.getOutcome());
+        assertTrue("it was over-travel when it was owed and it still is when it is paid", paid.isOvertravelled());
+        assertEquals(Long.valueOf(29), paid.getTrip().fareDifference(paid.getFareDue()));
     }
 
     @Test

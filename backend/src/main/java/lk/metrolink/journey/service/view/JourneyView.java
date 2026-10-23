@@ -21,11 +21,13 @@ public final class JourneyView {
     private final Long fareCharged;
     private final String status;
     private final boolean overtravelled;
+    private final TripView trip;
 
     public JourneyView(long journeyId, long ticketId, String qrCode, long passengerId, String passengerName,
                        String routeNo, String boardingStopId, String boardingStopName, String exitStopId,
                        String exitStopName, String plannedDestinationStopId, Instant tapInTime, Instant tapOutTime,
-                       Long fareDue, Long fareCharged, String status, boolean overtravelled) {
+                       Long fareDue, Long fareCharged, String status, boolean overtravelled,
+                       TripView trip) {
         this.journeyId = journeyId;
         this.ticketId = ticketId;
         this.qrCode = qrCode;
@@ -43,6 +45,7 @@ public final class JourneyView {
         this.fareCharged = fareCharged;
         this.status = status;
         this.overtravelled = overtravelled;
+        this.trip = trip;
     }
 
     public long getJourneyId() { return journeyId; }
@@ -61,6 +64,8 @@ public final class JourneyView {
     public Long getFareDue() { return fareDue; }
     public Long getFareCharged() { return fareCharged; }
     public String getStatus() { return status; }
-    /** True when the passenger got off after the planned stop. */
+    /** True when the trip went outside the ticket: boarded before its stop or got off after the planned stop. */
     public boolean isOvertravelled() { return overtravelled; }
+    /** The real trip next to the ticket: its kind, whether the stops differ, and the fare against the ticket's. */
+    public TripView getTrip() { return trip; }
 }

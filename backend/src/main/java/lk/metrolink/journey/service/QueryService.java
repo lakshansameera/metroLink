@@ -11,6 +11,7 @@ import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.domain.RouteStop;
 import lk.metrolink.journey.domain.Stop;
 import lk.metrolink.journey.domain.TemporaryAccount;
+import lk.metrolink.journey.domain.TripComparison;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.FareTransactionRepository;
 import lk.metrolink.journey.repository.JourneyRepository;
@@ -24,6 +25,7 @@ import lk.metrolink.journey.service.view.JourneyView;
 import lk.metrolink.journey.service.view.PassengerView;
 import lk.metrolink.journey.service.view.ReferenceView;
 import lk.metrolink.journey.service.view.TicketView;
+import lk.metrolink.journey.service.view.TripView;
 
 /**
  * Everything the screens read. It changes nothing; it only turns domain objects into views that carry names next
@@ -119,14 +121,14 @@ public final class QueryService {
             Route route = routes.findRoute(journey.getRouteNo())
                     .orElseThrow(() -> new NotFoundException("Route " + journey.getRouteNo()));
             String exitStopId = journey.getExitStopId();
-            boolean overtravelled = exitStopId != null
-                    && route.isBefore(ticket.getPlannedDestinationStopId(), exitStopId);
+            TripComparison trip = TripComparison.of(route, ticket, journey.getBoardingStopId(), exitStopId);
             return new JourneyView(journey.getJourneyId(), journey.getTicketId(), ticket.getQrCode(),
                     ticket.getPassengerId(), passengerName(ticket.getPassengerId()), journey.getRouteNo(),
                     journey.getBoardingStopId(), stopName(journey.getBoardingStopId()),
                     exitStopId, exitStopId == null ? null : stopName(exitStopId),
                     ticket.getPlannedDestinationStopId(), journey.getTapInTime(), journey.getTapOutTime(),
-                    journey.getFareDue(), journey.getFareCharged(), journey.status(), overtravelled);
+                    journey.getFareDue(), journey.getFareCharged(), journey.status(), trip.isOverTravel(),
+                    TripView.of(trip, journey.getFareDue()));
         });
     }
 

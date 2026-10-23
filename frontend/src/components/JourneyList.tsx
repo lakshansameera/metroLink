@@ -1,6 +1,7 @@
-import { lkr, timeOf } from '../format';
+import { lkr, signedLkr, timeOf } from '../format';
 import type { Journey, Ticket } from '../types';
 import { StateBadge } from './StateBadge';
+import { TripBadges } from './TripBadges';
 
 interface Props {
   journeys: Journey[];
@@ -25,6 +26,7 @@ export function JourneyList({ journeys, tickets, onSettle, busy }: Props) {
                 <span className="journey-states">
                   <StateBadge kind="Journey" state={j.status} />
                   {ticketOf.get(j.ticketId) && <StateBadge kind="Ticket" state={ticketOf.get(j.ticketId)!.status} />}
+                  <TripBadges trip={j.trip} />
                 </span>
               </div>
               <p className="journey-trip">
@@ -32,8 +34,14 @@ export function JourneyList({ journeys, tickets, onSettle, busy }: Props) {
               </p>
               <p className="journey-meta">
                 In at {timeOf(j.tapInTime)}, out at {timeOf(j.tapOutTime)}. Fare {lkr(j.fareDue)}, charged {lkr(j.fareCharged)}.
-                {j.overtravelled ? ' Went past the planned stop.' : ''}
               </p>
+              {ticketOf.get(j.ticketId) && (j.trip.boardedOffTicket || j.trip.exitedOffTicket || j.trip.fareDifference) ? (
+                <p className="journey-compare">
+                  Ticket: {ticketOf.get(j.ticketId)!.boardingStopName} to {ticketOf.get(j.ticketId)!.plannedDestinationStopName},{' '}
+                  {lkr(j.trip.quotedFare)}. Travelled: {j.boardingStopName} to {j.exitStopName ?? 'not exited yet'}
+                  {j.trip.fareDifference !== null ? `, ${lkr(j.fareDue)} (${signedLkr(j.trip.fareDifference)} against the ticket)` : ''}.
+                </p>
+              ) : null}
               {j.status === 'PAYMENT_PENDING' && (
                 <button type="button" disabled={busy} onClick={() => onSettle(j.journeyId)}>
                   Pay fare now

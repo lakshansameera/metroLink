@@ -81,6 +81,30 @@ public class BoardingTest extends OnEveryStore {
     }
 
     @Test
+    public void tappingInAtAnotherStopBeforeThePlannedDestinationIsAllowedAndNoted() {           // B4, X9
+        ScanResult result = f.in("MLK-HAPPY01", "S2", Fixture.MORNING);                          // the ticket says S1
+
+        assertEquals(ScanOutcome.JOURNEY_STARTED, result.getOutcome());
+        assertTrue(result.getTrip().boardedOffTicket());
+        assertNull("not decided until the exit", result.getTrip().kind());
+        assertEquals("S2", f.journeyOf("MLK-HAPPY01").getBoardingStopId());
+        assertEquals("the planned fare is checked from where they really boarded",
+                Long.valueOf(60), result.getRequired());
+    }
+
+    @Test
+    public void tappingInAtTheTicketsOwnStopAddsNothingToNote() {                                // X9
+        ScanResult result = f.in("MLK-HAPPY01", "S1", Fixture.MORNING);
+
+        assertNull(result.getTrip());
+    }
+
+    @Test
+    public void aRefusedTapInCarriesNoComparison() {                                             // B4
+        assertNull(f.in("MLK-HAPPY01", "S6", Fixture.MORNING).getTrip());
+    }
+
+    @Test
     public void theBoardingStopMustBeOnTheRouteAndBeforeThePlannedDestination() {               // B4
         assertRejected(f.in("MLK-HAPPY01", "S5", Fixture.MORNING), RejectionReason.INVALID_BOARDING_STOP); // is the destination
         assertRejected(f.in("MLK-HAPPY01", "S6", Fixture.MORNING), RejectionReason.INVALID_BOARDING_STOP); // after it

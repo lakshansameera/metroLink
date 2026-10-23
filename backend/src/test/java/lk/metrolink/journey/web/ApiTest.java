@@ -114,11 +114,37 @@ public class ApiTest extends OnEveryStore {
         assertEquals("COMPLETED", exited.json.get("journey").get("status").asText());
         assertEquals("2026-10-21T04:00:00Z", exited.json.get("journey").get("tapInTime").asText());
         assertFalse(exited.json.get("overtravelled").asBoolean());
+        assertEquals("AS_TICKETED", exited.json.get("journey").get("trip").get("kind").asText());
+        assertEquals(69, exited.json.get("journey").get("trip").get("quotedFare").asInt());
+        assertEquals(0, exited.json.get("journey").get("trip").get("fareDifference").asInt());
+        assertFalse(exited.json.get("journey").get("trip").get("overcharged").asBoolean());
 
         Reply statement = get("/api/passengers/1/account");
         assertEquals(200, statement.status);
         assertEquals(431, statement.json.get("passenger").get("balance").asInt());
         assertEquals("FARE-1", statement.json.get("charges").get(0).get("reference").asText());
+    }
+
+    @Test
+    public void aTripOffTheTicketIsOverTravelAndOverChargedOverHttp() throws Exception {
+        Reply boarded = scan("MLK-HAPPY01", "IN", "S2", MORNING);                              // the ticket says S1 to S5
+        assertEquals("JOURNEY_STARTED", boarded.json.get("outcome").asText());
+        assertEquals("WARNING", boarded.json.get("tone").asText());
+        assertTrue(boarded.json.get("journey").get("trip").get("boardedOffTicket").asBoolean());
+        assertTrue("not decided before the exit", boarded.json.get("journey").get("trip").get("kind").isNull());
+
+        Reply exited = scan("MLK-HAPPY01", "OUT", "S6", LATER);
+        JsonNode trip = exited.json.get("journey").get("trip");
+        assertEquals("JOURNEY_COMPLETED", exited.json.get("outcome").asText());
+        assertTrue(exited.json.get("overtravelled").asBoolean());
+        assertTrue(exited.json.get("journey").get("overtravelled").asBoolean());
+        assertEquals("OVER_TRAVEL", trip.get("kind").asText());
+        assertTrue(trip.get("boardedOffTicket").asBoolean());
+        assertTrue(trip.get("exitedOffTicket").asBoolean());
+        assertEquals(69, trip.get("quotedFare").asInt());
+        assertEquals(7, trip.get("fareDifference").asInt());
+        assertTrue(trip.get("overcharged").asBoolean());
+        assertEquals(76, exited.json.get("fare").get("charged").asInt());
     }
 
     @Test

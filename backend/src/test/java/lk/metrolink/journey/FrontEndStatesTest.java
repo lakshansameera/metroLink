@@ -18,6 +18,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lk.metrolink.journey.domain.JourneyState;
 import lk.metrolink.journey.domain.TicketState;
+import lk.metrolink.journey.domain.TripComparison;
 import lk.metrolink.journey.repository.OnEveryStore;
 import lk.metrolink.journey.service.ReaderDisplay;
 import lk.metrolink.journey.service.ScanDirection;
@@ -72,6 +73,19 @@ public class FrontEndStatesTest extends OnEveryStore {
     @Test
     public void theScreenKnowsExactlyTheJourneyStatesOfTheServer() throws IOException {               // V1
         assertEquals(JourneyState.names(), frontEndList("JOURNEY_STATUSES"));
+    }
+
+    @Test
+    public void theScreenKnowsExactlyTheKindsOfTripOfTheServer() throws IOException {                 // V5
+        assertEquals(TripComparison.Kind.names(), frontEndList("TRIP_KINDS"));
+    }
+
+    @Test
+    public void everyKindNamedIsARealKind() {                                                         // V5
+        for (String name : TripComparison.Kind.names()) {
+            assertEquals(name, TripComparison.Kind.valueOf(name).name());
+        }
+        assertEquals(TripComparison.Kind.values().length, TripComparison.Kind.names().size());
     }
 
     @Test
@@ -179,10 +193,32 @@ public class FrontEndStatesTest extends OnEveryStore {
         tap("MLK-PENDING", ScanDirection.IN, "S1");
         tap("MLK-PENDING", ScanDirection.OUT, "S5");
         tap("MLK-OVERTR1", ScanDirection.IN, "S1");
+        tap("MLK-OVERTR1", ScanDirection.OUT, "S5");                        // over-travel
 
         List<String> ticketsOnScreen = frontEndList("TICKET_STATUSES");
         List<String> journeysOnScreen = frontEndList("JOURNEY_STATUSES");
         app.queries.tickets().forEach(t -> assertTrue(t.getStatus(), ticketsOnScreen.contains(t.getStatus())));
         app.queries.journeys().forEach(j -> assertTrue(j.getStatus(), journeysOnScreen.contains(j.getStatus())));
+
+        List<String> tripsOnScreen = frontEndList("TRIP_KINDS");
+        app.queries.journeys().stream().map(j -> j.getTrip().getKind()).filter(kind -> kind != null)
+                .forEach(kind -> assertTrue(kind, tripsOnScreen.contains(kind)));
+        assertTrue("an over-travel trip was among them", app.queries.journeys().stream()
+                .anyMatch(j -> "OVER_TRAVEL".equals(j.getTrip().getKind())));
+    }
+
+    @Test
+    public void theTripShownForAJourneyIsTheOneTheReaderShowedAtTheTap() {                            // V5
+        ReaderDisplay in = app.reader.scan(new ScanRequest("MLK-HAPPY01", ScanDirection.IN, "S2", MORNING));
+        ReaderDisplay out = app.reader.scan(new ScanRequest("MLK-HAPPY01", ScanDirection.OUT, "S6", LATER));
+        JourneyView listed = app.queries.journeys().stream().filter(j -> j.getQrCode().equals("MLK-HAPPY01"))
+                .findFirst().orElseThrow();
+
+        assertEquals("the face and the list say the same", out.getJourney().getTrip().getKind(),
+                listed.getTrip().getKind());
+        assertEquals(out.getJourney().getTrip().getFareDifference(), listed.getTrip().getFareDifference());
+        assertEquals("OVER_TRAVEL", listed.getTrip().getKind());
+        assertTrue(in.getJourney().getTrip().isBoardedOffTicket());
+        assertTrue(listed.isOvertravelled());
     }
 }

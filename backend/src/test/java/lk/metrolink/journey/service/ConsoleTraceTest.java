@@ -103,6 +103,47 @@ public class ConsoleTraceTest extends OnEveryStore {
     }
 
     @Test
+    public void tappingInAtAnotherStopThanTheTicketSaysSoInTheLine() {                           // L6, X9
+        try (LogCapture capture = new LogCapture(Log.Level.INFO)) {
+            tap("MLK-HAPPY01", ScanDirection.IN, "S2");                                          // the ticket says S1
+
+            capture.assertInOrder(
+                    "JourneyService.board: ticket MLK-HAPPY01 was bought for stop S1 but the passenger tapped in at S2"
+                            + " (ticket S1 to S5, trip S2 to ?: not decided yet, boarded at another stop than the ticket)");
+            assertTrue(capture.text(), capture.lines().stream().anyMatch(line ->
+                    line.contains("JourneyService.board: JOURNEY_STARTED") && line.endsWith(", boarded off the ticket")));
+        }
+    }
+
+    @Test
+    public void tappingOutBeyondTheTicketSaysOverTravelAndTheFareAgainstTheTicket() {            // L6, X7, X10
+        tap("MLK-OVERTR1", ScanDirection.IN, "S1");
+        try (LogCapture capture = new LogCapture(Log.Level.INFO)) {
+            tap("MLK-OVERTR1", ScanDirection.OUT, "S5");
+
+            capture.assertInOrder(
+                    "JourneyService.alight: ticket MLK-OVERTR1 tapped out at stop S5",
+                    "JourneyService.alight: the trip compared with the ticket MLK-OVERTR1: ticket S1 to S4,"
+                            + " trip S1 to S5: OVER_TRAVEL, got off at another stop than the ticket,"
+                            + " fare LKR 69 against the ticket's LKR 54 (LKR 15 more, over-charged)",
+                    "JourneyService.alight: JOURNEY_COMPLETED, fare due LKR 69, charged LKR 69, balance LKR 431,"
+                            + " trip OVER_TRAVEL");
+        }
+    }
+
+    @Test
+    public void aTripMadeAsTheTicketSaysIsNotMadeToLookLikeATroubleOnTheConsole() {              // L6
+        tap("MLK-HAPPY01", ScanDirection.IN, "S1");
+        try (LogCapture capture = new LogCapture(Log.Level.INFO)) {
+            tap("MLK-HAPPY01", ScanDirection.OUT, "S5");
+
+            assertTrue(capture.text(), capture.text().contains("trip S1 to S5: AS_TICKETED"));
+            assertFalse(capture.text(), capture.text().contains("OVER_TRAVEL"));
+            assertFalse(capture.text(), capture.text().contains("over-charged"));
+        }
+    }
+
+    @Test
     public void aUsedTicketIsRefusedByItsOwnStateAndNoFareIsWorkedOut() {                        // L6
         tap("MLK-HAPPY01", ScanDirection.IN, "S1");
         tap("MLK-HAPPY01", ScanDirection.OUT, "S5");

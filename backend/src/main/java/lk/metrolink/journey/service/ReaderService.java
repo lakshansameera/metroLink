@@ -8,6 +8,9 @@ import lk.metrolink.journey.repository.RouteRepository;
 import lk.metrolink.journey.repository.UnitOfWork;
 import lk.metrolink.journey.service.ReaderDisplay.FareFigures;
 import lk.metrolink.journey.service.ReaderDisplay.Tone;
+import lk.metrolink.journey.service.view.JourneyView;
+import lk.metrolink.journey.service.view.TicketView;
+import lk.metrolink.journey.service.view.TripView;
 
 /**
  * The on-board reader, as one simple front door (the Facade pattern): give it a tap, get back what to show.
@@ -55,7 +58,9 @@ public final class ReaderService {
 
     private ReaderDisplay display(ScanResult r) {
         Tone tone = toneOf(r);
-        String message = messageOf(r);
+        TicketView ticket = r.getTicket() == null ? null : queries.ticketView(r.getTicket());
+        JourneyView journey = r.getJourney() == null ? null : queries.journeyView(r.getJourney());
+        String message = messageOf(r, ticket, journey);
         Log.info(Log.SERVICE, "ReaderService.display: %s -> tone %s, the reader shows \"%s\"", r.getOutcome(), tone,
                 message);
         return new ReaderDisplay(
@@ -63,8 +68,8 @@ public final class ReaderService {
                 tone,
                 message,
                 r.getReason(),
-                r.getTicket() == null ? null : queries.ticketView(r.getTicket()),
-                r.getJourney() == null ? null : queries.journeyView(r.getJourney()),
+                ticket,
+                journey,
                 new FareFigures(r.getFareDue(), r.getFareCharged(), r.getBalance(), r.getShortfall(), r.getRequired()),
                 r.isOvertravelled());
     }
@@ -72,6 +77,8 @@ public final class ReaderService {
     private static Tone toneOf(ScanResult r) {
         switch (r.getOutcome()) {
             case JOURNEY_STARTED:
+                // Tapping in at a stop other than the ticket's is let through, with a heads-up (X9).
+                return r.getTrip() != null && r.getTrip().boardedOffTicket() ? Tone.WARNING : Tone.SUCCESS;
             case JOURNEY_COMPLETED:
                 return Tone.SUCCESS;
             case PAYMENT_PENDING:
@@ -82,24 +89,66 @@ public final class ReaderService {
         }
     }
 
-    private static String messageOf(ScanResult r) {
+    private static String messageOf(ScanResult r, TicketView ticket, JourneyView journey) {
         switch (r.getOutcome()) {
             case JOURNEY_STARTED:
+                if (r.getTrip() != null && r.getTrip().boardedOffTicket() && ticket != null && journey != null) {
+                    return "Journey started at " + journey.getBoardingStopName() + ", not " + ticket.getBoardingStopName()
+                            + " as on your ticket. Your fare will be worked out from the stop you boarded at to the "
+                            + "stop you get off at, and charged when you get off.";
+                }
                 return "Journey started. Your fare will be charged when you get off.";
             case JOURNEY_COMPLETED:
-                String paid = "Fare LKR " + r.getFareCharged() + " charged. Balance LKR " + r.getBalance() + ".";
-                return r.isOvertravelled() ? paid + " You travelled past your planned stop." : paid;
+                return "Fare LKR " + r.getFareCharged() + " charged. Balance LKR " + r.getBalance() + "."
+                        + tripSentence(ticket, journey);
             case PAYMENT_PENDING:
                 if (r.getReason() == RejectionReason.ACCOUNT_EXPIRED) {
-                    return "Fare LKR " + r.getFareDue() + " is owed, but this account has expired and cannot be charged.";
+                    return "Fare LKR " + r.getFareDue() + " is owed, but this account has expired and cannot be charged."
+                            + tripSentence(ticket, journey);
                 }
                 return "Fare LKR " + r.getFareDue() + " is owed. Top up at least LKR " + r.getShortfall()
-                        + " to complete this journey.";
+                        + " to complete this journey." + tripSentence(ticket, journey);
             case ALREADY_SETTLED:
                 return "This journey is already complete (LKR " + r.getFareCharged() + "). Nothing more was charged.";
             default:
                 return rejectionMessage(r);
         }
+    }
+
+    /**
+     * What to add when the real trip was not the ticket's trip (rules X7, X9, X10): which stops the ticket named and
+     * which the passenger really used, then how the fare compares with the ticket's fare. Empty for a trip made
+     * exactly as ticketed at the ticket's price.
+     */
+    private static String tripSentence(TicketView ticket, JourneyView journey) {
+        TripView trip = journey == null ? null : journey.getTrip();
+        if (trip == null || trip.getKind() == null || ticket == null) {
+            return "";
+        }
+        String bought = ticket.getBoardingStopName() + " to " + ticket.getPlannedDestinationStopName();
+        String travelled = journey.getBoardingStopName() + " to " + journey.getExitStopName();
+        StringBuilder out = new StringBuilder();
+        switch (trip.getKind()) {
+            case "OVER_TRAVEL":
+                out.append(" Over-travel: your ticket was ").append(bought).append(", you travelled ")
+                        .append(travelled).append(".");
+                break;
+            case "SHORTER":
+                out.append(" Shorter trip: your ticket was ").append(bought).append(", you travelled ")
+                        .append(travelled).append(".");
+                break;
+            default:
+                break;
+        }
+        Long difference = trip.getFareDifference();
+        if (difference != null && difference > 0) {
+            out.append(" Over-charged: LKR ").append(difference).append(" more than the ticket fare of LKR ")
+                    .append(trip.getQuotedFare()).append(".");
+        } else if (difference != null && difference < 0) {
+            out.append(" LKR ").append(-difference).append(" less than the ticket fare of LKR ")
+                    .append(trip.getQuotedFare()).append(".");
+        }
+        return out.toString();
     }
 
     private static String rejectionMessage(ScanResult r) {

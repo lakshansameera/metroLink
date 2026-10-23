@@ -23,8 +23,10 @@ Each rule is one testable sentence. Alerts belong to the separate Monitor Credit
 | X4 | The fare uses the rule in force on the tap-in date. Distance fare is `base + rate x km`, rounded up to a whole rupee; flat fare is the flat amount. | 3b |
 | X5 | Enough credit: debit once, journey `COMPLETED`, `fareCharged = fareDue`, ticket `USED`. | 3a, 3d |
 | X6 | Not enough credit: nothing is debited, the journey becomes `PAYMENT_PENDING` with `fareDue` recorded and `fareCharged` empty. | 3d |
-| X7 | Exiting past the planned stop is priced to the actual stop and the result is marked `overtravelled`. It is a flag, not a payment failure. | 3d |
+| X7 | A trip that goes outside the ticket is `OVER_TRAVEL`: the passenger got off after the planned stop, or tapped in before the ticket's boarding stop, or both. It is priced to the stops really used (X3) and the result is marked `overtravelled`. It is a flag, not a payment failure. | 3d |
 | X8 | Scanning out again on a settled journey changes nothing (`ALREADY_SETTLED`). | 3d, 3e |
+| X9 | Tapping in at a stop other than the ticket's, but before the planned destination (B4), is allowed. The journey records the stop really tapped at, the planned-fare check (B5) is made from that stop, the reader answers with a warning that names both stops, and the console log says so. Tapping in at the ticket's own stop adds nothing. | `BoardingTest`, `ReaderServiceTest`, `ConsoleTraceTest` |
+| X10 | At the exit the real trip is put next to the ticket. `OVER_TRAVEL` (X7); `SHORTER` when it stays inside the ticket's stretch but at other stops (boarded later or got off earlier); `AS_TICKETED` when the stops are the ticket's. The fare owed is compared with the ticket's fare: `fareDifference` is owed minus quoted, and `overcharged` is true when it is above zero. Nothing is added to the fare for travelling further and the ticket's own quoted fare is never rewritten. A fare that waits in `PAYMENT_PENDING` is compared the same way when it is settled. | `TripComparisonTest`, `ExitTest`, `ReaderServiceTest`, `ApiTest`, `ConsoleTraceTest` |
 
 ## Data integrity
 
@@ -107,6 +109,7 @@ The screen shows a ticket's state and a journey's state on each ticket, on each 
 | V2 | The database accepts exactly those states, so no row can hold a state the screen does not know. The test reads the two `CHECK` lists in `schema.sql`. | `FrontEndStatesTest` |
 | V3 | A ticket and its journey show the pair the server moves them through. Tap in: `ACTIVE` and `IN_PROGRESS`. Tap out with the fare paid: `USED` and `COMPLETED`, together. Tap out with the fare unpaid: `ACTIVE` and `PAYMENT_PENDING`, until it is paid, and then `USED` and `COMPLETED`. A ticket is `USED` only when its journey is `COMPLETED`. | `FrontEndStatesTest`, `ExitTest`, `SettlementTest` |
 | V4 | A refused tap changes no state. A ticket for another day stays `ACTIVE` (nothing expires it by itself) and the screen says the reader refuses it for its date. The answer to a refused tap carries the ticket only, so the reader face shows only the ticket's state then, as the console log does. | `FrontEndStatesTest` |
+| V5 | The screen writes a kind of trip exactly as the server names it: `AS_TICKETED`, `SHORTER`, `OVER_TRAVEL`. Its list (`TRIP_KINDS` in `frontend/src/types.ts`) is the server's list, every kind the server sends is in it, and the reader face and the journey list show the same kind and the same difference for one journey. Over-travel and over-charged are chips beside the states, not new states: a journey is still `COMPLETED` or `PAYMENT_PENDING`. | `FrontEndStatesTest`, `ApiTest` |
 
 ## Worked numbers (for the first tests)
 

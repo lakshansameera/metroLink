@@ -1,4 +1,4 @@
-import type { JourneyStatus, TicketStatus } from './types';
+import type { JourneyStatus, TicketStatus, TripKind } from './types';
 
 const COLOMBO = 'Asia/Colombo';
 
@@ -34,6 +34,16 @@ export const stateMeaning: {
     COMPLETED: 'The fare was charged. The ticket is then USED.',
   },
 };
+
+/** The plain-words meaning of each kind of trip, for the tooltip. The names themselves come from the server. */
+export const tripMeaning: Record<TripKind, string> = {
+  AS_TICKETED: 'The stops are the ticket\'s stops.',
+  SHORTER: 'Boarded later or got off earlier than the ticket, so the fare is for the shorter trip.',
+  OVER_TRAVEL: 'Went outside the ticket: boarded before its stop or got off after the planned stop. The fare is for the stops really used.',
+};
+
+/** +LKR 15 or -LKR 15, so a difference reads as more or less than the ticket's fare. */
+export const signedLkr = (amount: number): string => (amount > 0 ? `+LKR ${amount}` : amount < 0 ? `-LKR ${-amount}` : 'LKR 0');
 
 export const outcomeLabel: Record<string, string> = {
   JOURNEY_STARTED: 'Journey started',

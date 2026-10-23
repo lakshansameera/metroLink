@@ -2,6 +2,7 @@ package lk.metrolink.journey.service;
 
 import lk.metrolink.journey.domain.Journey;
 import lk.metrolink.journey.domain.QRTicket;
+import lk.metrolink.journey.domain.TripComparison;
 
 /**
  * The structured answer to a scan or a settlement. The Reader turns it into a tone and a sentence.
@@ -18,7 +19,7 @@ public final class ScanResult {
     private final Long balance;
     private final Long shortfall;
     private final Long required;
-    private final boolean overtravelled;
+    private final TripComparison trip;
 
     private ScanResult(Builder b) {
         this.outcome = b.outcome;
@@ -31,7 +32,7 @@ public final class ScanResult {
         this.balance = b.balance;
         this.shortfall = b.shortfall;
         this.required = b.required;
-        this.overtravelled = b.overtravelled;
+        this.trip = b.trip;
     }
 
     public static Builder of(ScanOutcome outcome) {
@@ -47,7 +48,8 @@ public final class ScanResult {
         if (fareCharged != null) out.append(", charged LKR ").append(fareCharged);
         if (balance != null) out.append(", balance LKR ").append(balance);
         if (shortfall != null) out.append(", short by LKR ").append(shortfall);
-        if (overtravelled) out.append(", went past the planned stop");
+        if (trip != null && trip.kind() != null) out.append(", trip ").append(trip.kind());
+        else if (trip != null && trip.boardedOffTicket()) out.append(", boarded off the ticket");
         return out.toString();
     }
 
@@ -62,8 +64,13 @@ public final class ScanResult {
     public Long getBalance() { return balance; }
     public Long getShortfall() { return shortfall; }
     public Long getRequired() { return required; }
-    /** True when the passenger got off after the planned stop (rule X7). A flag, not a failure. */
-    public boolean isOvertravelled() { return overtravelled; }
+    /**
+     * How the real trip compares with the ticket (rules X7, X9, X10), or null when the scan was refused.
+     * Over-travel and a fare above the ticket's are flags, not failures.
+     */
+    public TripComparison getTrip() { return trip; }
+    /** True when the passenger went outside the ticket's stretch of road (rule X7). A flag, not a failure. */
+    public boolean isOvertravelled() { return trip != null && trip.isOverTravel(); }
 
     public static final class Builder {
         private final ScanOutcome outcome;
@@ -76,7 +83,7 @@ public final class ScanResult {
         private Long balance;
         private Long shortfall;
         private Long required;
-        private boolean overtravelled;
+        private TripComparison trip;
 
         private Builder(ScanOutcome outcome) {
             this.outcome = outcome;
@@ -91,7 +98,7 @@ public final class ScanResult {
         public Builder balance(Long v) { this.balance = v; return this; }
         public Builder shortfall(Long v) { this.shortfall = v; return this; }
         public Builder required(Long v) { this.required = v; return this; }
-        public Builder overtravelled(boolean v) { this.overtravelled = v; return this; }
+        public Builder trip(TripComparison v) { this.trip = v; return this; }
 
         public ScanResult build() {
             return new ScanResult(this);

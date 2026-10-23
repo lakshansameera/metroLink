@@ -17,35 +17,33 @@ import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Resident;
 import lk.metrolink.journey.domain.TemporaryAccount;
 import lk.metrolink.journey.domain.TicketState;
-import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
-import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
-import lk.metrolink.journey.repository.memory.InMemoryDatabase;
-import lk.metrolink.journey.repository.memory.InMemoryFareTransactionRepository;
-import lk.metrolink.journey.repository.memory.InMemoryJourneyRepository;
-import lk.metrolink.journey.repository.memory.InMemoryPassengerRepository;
-import lk.metrolink.journey.repository.memory.InMemoryTicketRepository;
 import org.junit.Before;
 import org.junit.Test;
 
-/** The database refuses data that would break the rules, the way real constraints would (D2, D3, D4). */
-public class ConstraintsTest {
+/** The store refuses data that would break the rules, the way real constraints would (D2, D3, D4). Same on every store. */
+public class ConstraintsTest extends OnEveryStore {
 
     private static final LocalDate TODAY = LocalDate.parse("2026-10-21");
     private static final Instant NOW = Instant.parse("2026-10-21T04:00:00Z");
 
-    private InMemoryDatabase db;
+    private UnitOfWork db;
     private AccountRepository accounts;
     private TicketRepository tickets;
     private JourneyRepository journeys;
     private FareTransactionRepository transactions;
+    private PassengerRepository passengers;
+    private CredentialRepository credentials;
 
     @Before
     public void setUp() {
-        db = InMemoryDatabase.seeded(TODAY);
-        accounts = new InMemoryAccountRepository(db);
-        tickets = new InMemoryTicketRepository(db);
-        journeys = new InMemoryJourneyRepository(db);
-        transactions = new InMemoryFareTransactionRepository(db);
+        Store store = open(TODAY);
+        db = store.unitOfWork();
+        accounts = store.accounts();
+        tickets = store.tickets();
+        journeys = store.journeys();
+        transactions = store.fareTransactions();
+        passengers = store.passengers();
+        credentials = store.credentials();
     }
 
     private long ticketId(String qr) {
@@ -154,30 +152,22 @@ public class ConstraintsTest {
 
     // ---- onboarding: new customers, passwords and accounts (O2, O5, O6)
 
-    private PassengerRepository passengers() {
-        return new InMemoryPassengerRepository(db);
-    }
-
-    private CredentialRepository credentials() {
-        return new InMemoryCredentialRepository(db);
-    }
-
     @Test
     public void twoPassengersCannotShareAnEmail() {
-        expectRefused(() -> passengers().insert(new Passenger(0, "Copy", "nimal@example.com", new Resident())));
+        expectRefused(() -> passengers.insert(new Passenger(0, "Copy", "nimal@example.com", new Resident())));
     }
 
     @Test
     public void theEmailUniquenessIgnoresCase() {
-        expectRefused(() -> passengers().insert(new Passenger(0, "Copy", "NIMAL@Example.com", new Resident())));
+        expectRefused(() -> passengers.insert(new Passenger(0, "Copy", "NIMAL@Example.com", new Resident())));
     }
 
     @Test
     public void aNewPassengerGetsTheNextIdAndIsReadable() {
-        Passenger stored = db.run(() -> passengers().insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
+        Passenger stored = db.run(() -> passengers.insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
 
         assertEquals(6, stored.getPassengerId());
-        assertEquals("Amaya", db.run(() -> passengers().find(6)).orElseThrow().getName());
+        assertEquals("Amaya", db.run(() -> passengers.find(6)).orElseThrow().getName());
     }
 
     @Test
@@ -192,14 +182,14 @@ public class ConstraintsTest {
 
     @Test
     public void aNewAccountWithANegativeBalanceIsRefused() {
-        db.execute(() -> passengers().insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
+        db.execute(() -> passengers.insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
 
         expectRefused(() -> accounts.insert(new PermanentAccount(-5, 6, 0)));
     }
 
     @Test
     public void aNewAccountGetsTheNextIdAndKeepsItsKind() {
-        db.execute(() -> passengers().insert(new Passenger(0, "Emma", "emma.w@example.com",
+        db.execute(() -> passengers.insert(new Passenger(0, "Emma", "emma.w@example.com",
                 new NonResident(TODAY.plusDays(30)))));
 
         Account stored = db.run(() -> accounts.insert(new TemporaryAccount(0, 6, 0, TODAY.plusDays(30))));
@@ -210,11 +200,11 @@ public class ConstraintsTest {
 
     @Test
     public void aPasswordForAnUnknownPassengerIsRefused() {
-        expectRefused(() -> credentials().insert(99, PasswordHash.of("Sunny day 42", 1_000)));
+        expectRefused(() -> credentials.insert(99, PasswordHash.of("Sunny day 42", 1_000)));
     }
 
     @Test
     public void aPassengerCannotHaveTwoPasswords() {
-        expectRefused(() -> credentials().insert(1, PasswordHash.of("Sunny day 42", 1_000)));
+        expectRefused(() -> credentials.insert(1, PasswordHash.of("Sunny day 42", 1_000)));
     }
 }

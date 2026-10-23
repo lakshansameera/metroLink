@@ -8,17 +8,18 @@ import static org.junit.Assert.assertTrue;
 import java.time.Instant;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.TicketState;
+import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.Before;
 import org.junit.Test;
 
 /** Rules B1 to B6, plus D6 (dates are Colombo dates). */
-public class BoardingTest {
+public class BoardingTest extends OnEveryStore {
 
     private Fixture f;
 
     @Before
     public void setUp() {
-        f = new Fixture();
+        f = new Fixture(open(Fixture.TODAY));
     }
 
     private void assertRejected(ScanResult result, RejectionReason reason) {

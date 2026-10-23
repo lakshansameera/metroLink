@@ -16,17 +16,18 @@ import lk.metrolink.journey.domain.Journey;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.TicketState;
 import lk.metrolink.journey.repository.FareTransactionRepository;
+import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.Before;
 import org.junit.Test;
 
 /** Rules X1 to X8 and D2. */
-public class ExitTest {
+public class ExitTest extends OnEveryStore {
 
     private Fixture f;
 
     @Before
     public void setUp() {
-        f = new Fixture();
+        f = new Fixture(open(Fixture.TODAY));
     }
 
     @Test
@@ -303,7 +304,7 @@ public class ExitTest {
 
     @Test
     public void ifThePaymentFailsHalfWayEverythingIsUndone() {                                   // D5
-        Fixture failing = new Fixture(real -> new FareTransactionRepository() {
+        Fixture failing = new Fixture(open(Fixture.TODAY), real -> new FareTransactionRepository() {
             @Override
             public Optional<FareTransaction> findByReference(String reference) {
                 return real.findByReference(reference);

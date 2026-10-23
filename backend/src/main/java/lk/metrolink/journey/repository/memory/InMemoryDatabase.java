@@ -13,6 +13,7 @@ import lk.metrolink.journey.domain.PasswordHash;
 import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.domain.Stop;
+import lk.metrolink.journey.repository.DemoData;
 import lk.metrolink.journey.repository.UnitOfWork;
 
 /**
@@ -104,10 +105,39 @@ public final class InMemoryDatabase implements UnitOfWork {
     public void reset(LocalDate today) {
         run(() -> {
             Tables fresh = new Tables();
-            DemoData.load(fresh, today);
+            load(fresh, today);
             tables = fresh;
             return null;
         });
+    }
+
+    /** Puts the shared demo data (see {@link DemoData}) into empty tables. */
+    private static void load(Tables t, LocalDate today) {
+        for (Stop stop : DemoData.stops()) {
+            t.stops.put(stop.getStopId(), stop);
+        }
+        for (Route route : DemoData.routes()) {
+            t.routes.put(route.getRouteNo(), route);
+        }
+        for (FareRule rule : DemoData.fareRules()) {
+            t.fareRules.put(rule.getFareRuleId(), rule);
+        }
+        for (DemoData.Customer customer : DemoData.customers(today)) {
+            Passenger passenger = customer.passenger();
+            long id = passenger.getPassengerId();
+            t.passengers.put(id, passenger);
+            Account account = passenger.openAccount(id);       // same id as the customer keeps the demo readable
+            account.credit(customer.balance(), customer.fundedAt());
+            t.accounts.put(id, account);
+            t.credentials.put(id, customer.passwordHash());
+            // Customers who register later get the next free numbers.
+            t.nextPassengerId = Math.max(t.nextPassengerId, id + 1);
+            t.nextAccountId = Math.max(t.nextAccountId, id + 1);
+        }
+        for (QRTicket draft : DemoData.tickets(today)) {
+            long id = t.nextTicketId++;
+            t.tickets.put(id, draft.withId(id));
+        }
     }
 
     /** Repositories call this on every access, so using one outside a unit of work fails loudly. */

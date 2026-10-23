@@ -2,7 +2,7 @@
 
 Alerts are not part of this function (they belong to Monitor Credit Alerts). Going past the planned stop is only a flag on the result.
 
-Sections 1 to 7 describe Journey Execution. Section 8 describes Customer onboarding, which was added later and reuses the same layers.
+Sections 1 to 7 describe Journey Execution. Section 8 describes Customer onboarding, which was added later and reuses the same layers. Section 9 describes the SQL database, which replaced memory as the default home of the data without changing a service.
 
 ## 1. Domain model
 
@@ -122,7 +122,7 @@ The payoff: when a fare is wrong, I look in `fare`, never in the browser.
 ## 6. Eight decisions
 
 1. **Money is whole rupees in a `long`.** No `double` for money, ever.
-2. **Storage sits behind interfaces.** The in-memory store can later be replaced by a database without touching a service.
+2. **Storage sits behind interfaces.** The in-memory store can be replaced by a database without touching a service. It was: section 9 added the SQL store, and no service, route or screen changed.
 3. **Charge on exit, never at boarding.** The boarding balance check is advisory.
 4. **A debit is idempotent.** Its reference `FARE-<journeyId>` is unique, so a retried request cannot charge twice.
 5. **The server decides, the browser displays.** No fare or validity logic in React.
@@ -139,13 +139,14 @@ The payoff: when a fare is wrong, I look in `fare`, never in the browser.
 | **Factory Method** | `Residency.openAccount`, called by `Passenger.openAccount` | The passenger never decides which kind of account to build; its residency does. | 3a |
 | **Information Expert** | `Account` owns its balance (no setter); `Route` owns its stops and distances; `QRTicket` decides its own refusal | The object with the data makes the decision. | 3a, 3b |
 | **Strategy** | `FareStrategy` with `DistanceFareStrategy` and `FlatFareStrategy`, chosen by `FareCalculator` from the `FareRule` type | The fare algorithm is chosen from outside by data and never changes during a calculation. | 3b |
-| **Repository** | `repository` interfaces, `repository.memory` implementations | Services do not know how data is stored (decision 2). | 3c |
-| **Unit of Work** | `UnitOfWork`, `InMemoryDatabase` | The writes of one scan succeed together or not at all (rule D5). | 3c |
+| **Repository** | `repository` interfaces; `repository.memory` and `repository.jdbc` implementations | Services do not know how data is stored (decision 2). | 3c, 9 |
+| **Unit of Work** | `UnitOfWork`; `InMemoryDatabase` and `JdbcDatabase` | The writes of one scan succeed together or not at all (rule D5). In SQL it is one database transaction. | 3c, 9 |
 | **Exception translation** | `DomainException` carries a code and an HTTP status; `NotFoundException`, `ConstraintViolationException` extend it; `ApiServer` turns them into responses | Services know nothing about HTTP. | 3e |
 | **Service layer, Facade** | `JourneyService` for the workflow, `ReaderService` as the single entry for the reader screen | One place per workflow. The web layer calls one object. | 3d |
 | **Static factory** | `Journey.start`, `FareRule.distance/flat`, `FareTransaction.forJourney`, `TicketCheck.ok/refused` | Names say what is being made; a refused ticket is an answer, not an exception (decision 6). | 3a to 3d |
 | **Builder** | `ScanResult.Builder` | A scan result has many optional parts. | 3d |
-| **Composition root** | `Container` | The only place that knows which store is in use. | 3e |
+| **Composition root** | `Container` | The only place that wires services to a store. `App` chooses which store. | 3e, 9 |
+| **Abstract Factory** | `Store` with `InMemoryStore` and `JdbcStore` | One object hands out a matching set (the unit of work and every repository), so a repository can never be paired with a unit of work from another store. | 9 |
 | **Simple factory** | `OnboardingRequest.residency()` | The request turns "RESIDENT" or "NON_RESIDENT" plus a date into the right `Residency` object once, so no caller writes `if (resident)`. | 8 |
 | **Facade** | `OnboardingService` (the "AuthSystem" in the sequence diagram) | The web layer calls `register` and `login` and knows nothing about hashing, ids or accounts. | 8 |
 | **Immutable value object** | `PasswordHash`, `OnboardingRequest` | A hash cannot be changed after it is made; a request is checked, never edited. | 8 |
@@ -203,4 +204,80 @@ These are real gaps. They are listed so nobody assumes they exist.
 - **No lockout or rate limit.** Someone can try passwords as fast as the server answers.
 - **No HTTPS.** The server speaks plain HTTP, so a password crosses the network readable. Use HTTPS in front of a real deployment.
 - **No password change or reset.**
-- **Data is in memory.** Registered customers are lost when the server stops, like all other data.
+- **Data used to be lost on exit.** That is no longer so: customers are stored in the database (section 9). Only `METROLINK_DB=memory` forgets them.
+
+## 9. The database
+
+Decision 2 said storage sits behind interfaces so a database could replace memory later. This section is that replacement. The services, the web layer and the React screen did not change.
+
+### The shape
+
+```
+                 Container  (wires services to one Store)
+                     |
+                  Store  (interface: unit of work + every repository + reset + close)
+                 /     \
+       InMemoryStore   JdbcStore
+        |                |
+ InMemoryDatabase   JdbcDatabase  --JDBC-->  H2 file (or any SQL database)
+ in-memory repos    Jdbc*Repository (x8), schema.sql
+```
+
+`App` reads `METROLINK_DB` and opens one of the two stores. Everything above `Store` is the same code for both. `DemoData` holds the demo network, customers and tickets once, and both stores load from it, so they start from identical data.
+
+### Tables
+
+```mermaid
+erDiagram
+    passengers ||--o| credentials : "has a password"
+    passengers ||--o| accounts : "owns"
+    passengers ||--o{ tickets : "holds"
+    tickets ||--o| journeys : "travelled as"
+    journeys ||--o| fare_transactions : "paid by"
+    accounts ||--o{ fare_transactions : "is debited by"
+    routes ||--o{ route_stops : "passes"
+    stops ||--o{ route_stops : "is on"
+    routes ||--o{ fare_rules : "is priced by"
+    routes ||--o{ tickets : "is ridden on"
+```
+
+`id_counters` (one row per table, the next free id) sits outside the diagram. Money is `BIGINT` whole rupees, moments are `TIMESTAMP(6)` in UTC, travel and visa dates are `DATE`.
+
+### The rules the tables enforce
+
+The program checks every rule first, so the reader gets a clear message. The tables check them again, so a bug or a second program cannot get bad data in.
+
+| Rule | Constraint |
+|---|---|
+| A balance never goes below zero | `CHECK (balance >= 0)` on `accounts` |
+| D4: a ticket has at most one journey | `UNIQUE (ticket_id)` on `journeys` |
+| D2: a journey is charged once | `UNIQUE (journey_id)` and `UNIQUE (reference)` on `fare_transactions` |
+| O2: one customer per email, ignoring case and spaces | `UNIQUE (email_key)` on `passengers`, where `email_key` is the email trimmed and in lower case |
+| One account per customer | `UNIQUE (passenger_id)` on `accounts` |
+| A resident has no visa date, a non-resident has one | `CHECK` on `passengers` |
+| Nothing points at a row that does not exist | `FOREIGN KEY` on every reference |
+| Only real states | `CHECK (status IN (...))` on `tickets` and `journeys` |
+
+### Decisions
+
+1. **The account kind is not stored.** An `accounts` row holds only the balance. Whether the account is permanent or temporary, and when it stops working, comes from the customer's residency and visa date. That is rule A1 (residency decides the account), and it means the two can never disagree. The repository also refuses an account of the wrong kind for its customer.
+2. **A unit of work is one transaction.** `JdbcDatabase` keeps one connection and one lock. The outermost `run` is a transaction: committed when the work finishes, rolled back when an exception escapes. A unit of work started inside another joins it. That reproduces what the in-memory store promised, including rule D5 (a scan that fails halfway leaves nothing behind), and the lock is what makes two simultaneous exit scans produce one debit.
+3. **Ids come from a counter table, not auto-increment.** `id_counters` is read and bumped inside the same transaction as the insert. A change that is rolled back therefore gives its ids back, exactly as in memory, and the tests can say "the next customer is number 6". It also keeps the SQL portable.
+4. **Errors are translated, as before.** A broken constraint becomes a `ConstraintViolationException` (HTTP 409) naming the table and the rule, chosen from the SQL state (23505 duplicate, 23503 and 23506 foreign key, 23513 and 23514 check). Anything else becomes a `DataAccessException`, which is a bug or an outage and shows as a 500.
+5. **Times are UTC.** An `Instant` is written as a UTC `LocalDateTime` and read back the same way, so the data means the same whatever time zone the server runs in. A test writes in one zone and reads in another.
+6. **First start loads the demo data; later starts leave the data alone.** `JdbcStore.open` creates any missing table from `schema.sql`, and loads the demo data only if the database has no stops. "Start over with demo data" empties every table and loads it again in one transaction.
+7. **Every commit reaches the disk before the answer.** The default URL has `WRITE_DELAY=0`. H2's default waits up to a second before writing, and when the server was killed straight after "account opened" (six times out of six, in a trial) the customer was gone on the next start. With the option, all six survived. A normal stop is safe either way.
+8. **Prepared statements everywhere.** Every value reaches SQL as a parameter, never joined into the text, so input cannot change a query.
+
+### How it is tested
+
+Every test that touches a store (services, constraints, demo data, onboarding, the HTTP API, the unit of work) extends `OnEveryStore` and runs twice, once per `StoreKind`, so the two stores are held to the same behaviour. `RepositoryQueriesTest` checks list order and that saving one row changes only that row, which a missing `ORDER BY` or `WHERE` would break without any test noticing until a second row exists. `JdbcStoreTest` covers what only a real database adds: data survives closing and reopening a file, an existing database is not reloaded, "start over" persists, a failed unit of work leaves nothing after a restart, ids keep counting, time zones do not matter, and the tables refuse bad data when SQL is sent straight to them, bypassing the program.
+
+### Not built
+
+- **One server only.** The lock is inside the program. Two servers on one database would not take turns, so two scans could read the same balance and each write their own result. The unique constraints would still stop a double charge, but not a lost update. Several servers would need a connection per request and row locking (`SELECT ... FOR UPDATE`) or a version column.
+- **No schema migrations.** `schema.sql` creates tables that are missing and never alters one that exists. After a change to a table, delete the database file (or write an `ALTER` by hand). A migration tool such as Flyway would do this properly.
+- **No connection pool.** One connection is enough for one lock.
+- **Only H2 is tested.** The SQL avoids vendor features, but PostgreSQL and MySQL were not run. MySQL reports every broken constraint with one SQL state, so its refusals would be accurate in kind but less specific in wording.
+- **Demo tickets are dated for the day the database was created or reset.** Later they are for the wrong day, so press "Start over with demo data" to get tickets for the current day. That also removes registered customers.
+- **Local settings only.** The default login is `sa` with an empty password, fine for a file on a developer's machine and not for a deployment.

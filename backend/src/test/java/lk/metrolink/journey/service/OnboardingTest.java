@@ -19,14 +19,10 @@ import lk.metrolink.journey.domain.PasswordHash;
 import lk.metrolink.journey.domain.ResidencyKind;
 import lk.metrolink.journey.repository.AccountRepository;
 import lk.metrolink.journey.repository.CredentialRepository;
-import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
-import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
-import lk.metrolink.journey.repository.memory.InMemoryDatabase;
-import lk.metrolink.journey.repository.memory.InMemoryFareTransactionRepository;
-import lk.metrolink.journey.repository.memory.InMemoryJourneyRepository;
-import lk.metrolink.journey.repository.memory.InMemoryPassengerRepository;
-import lk.metrolink.journey.repository.memory.InMemoryRouteRepository;
-import lk.metrolink.journey.repository.memory.InMemoryTicketRepository;
+import lk.metrolink.journey.repository.OnEveryStore;
+import lk.metrolink.journey.repository.PassengerRepository;
+import lk.metrolink.journey.repository.Store;
+import lk.metrolink.journey.repository.UnitOfWork;
 import lk.metrolink.journey.service.view.PassengerView;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,7 +31,7 @@ import org.junit.Test;
  * Customer onboarding, from the "New user - Registration" and "Existing user - Login" branches of the Top Up Credit
  * sequence. Each test names the rule it proves (O1 to O9 in docs/rules.md).
  */
-public class OnboardingTest {
+public class OnboardingTest extends OnEveryStore {
 
     private static final LocalDate TODAY = LocalDate.parse("2026-10-21");
     /** 09:30 in Colombo on TODAY. */
@@ -43,22 +39,22 @@ public class OnboardingTest {
     private static final int FAST = 1_000;
     private static final String DEMO_PASSWORD = "Demo@1234";
 
-    private InMemoryDatabase db;
-    private InMemoryPassengerRepository passengers;
-    private InMemoryAccountRepository accounts;
-    private InMemoryCredentialRepository credentials;
+    private UnitOfWork db;
+    private PassengerRepository passengers;
+    private AccountRepository accounts;
+    private CredentialRepository credentials;
     private QueryService queries;
     private OnboardingService onboarding;
 
     @Before
     public void setUp() {
-        db = InMemoryDatabase.seeded(TODAY);
-        passengers = new InMemoryPassengerRepository(db);
-        accounts = new InMemoryAccountRepository(db);
-        credentials = new InMemoryCredentialRepository(db);
-        queries = new QueryService(db, passengers, accounts, new InMemoryTicketRepository(db),
-                new InMemoryJourneyRepository(db), new InMemoryFareTransactionRepository(db),
-                new InMemoryRouteRepository(db));
+        Store store = open(TODAY);
+        db = store.unitOfWork();
+        passengers = store.passengers();
+        accounts = store.accounts();
+        credentials = store.credentials();
+        queries = new QueryService(db, passengers, accounts, store.tickets(), store.journeys(),
+                store.fareTransactions(), store.routes());
         onboarding = new OnboardingService(db, passengers, accounts, credentials, queries, FAST);
     }
 

@@ -8,11 +8,12 @@ import java.time.Instant;
 import lk.metrolink.journey.domain.DomainException;
 import lk.metrolink.journey.domain.Journey;
 import lk.metrolink.journey.domain.NotFoundException;
+import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.Before;
 import org.junit.Test;
 
 /** Rule D1: a PAYMENT_PENDING journey can be settled later. */
-public class SettlementTest {
+public class SettlementTest extends OnEveryStore {
 
     private static final Instant AFTER_TOP_UP = Instant.parse("2026-10-21T08:00:00Z");
 
@@ -21,7 +22,7 @@ public class SettlementTest {
 
     @Before
     public void setUp() {
-        f = new Fixture();
+        f = new Fixture(open(Fixture.TODAY));
         f.in("MLK-PENDING", "S1", Fixture.MORNING);
         f.out("MLK-PENDING", "S5", Fixture.LATER);                                               // owes 69, has 45
         pendingJourneyId = f.journeyOf("MLK-PENDING").getJourneyId();

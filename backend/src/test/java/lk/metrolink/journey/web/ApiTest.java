@@ -17,12 +17,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import lk.metrolink.journey.Container;
 import lk.metrolink.journey.domain.Dates;
+import lk.metrolink.journey.repository.OnEveryStore;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-/** The API over real HTTP on a free port: the same requests the React screen makes. */
-public class ApiTest {
+/** The API over real HTTP on a free port: the same requests the React screen makes, on every store. */
+public class ApiTest extends OnEveryStore {
 
     private static final LocalDate TODAY = LocalDate.parse("2026-10-21");
     private static final String MORNING = "2026-10-21T09:30:00+05:30";
@@ -33,7 +34,7 @@ public class ApiTest {
 
     @Before
     public void setUp() throws Exception {
-        server = ApiServer.start(Container.create(TODAY), 0);
+        server = ApiServer.start(Container.create(open(TODAY), TODAY), 0);
         client = HttpClient.newHttpClient();
     }
 

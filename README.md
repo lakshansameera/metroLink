@@ -9,7 +9,7 @@ This repository holds two functions of the larger MetroLink system:
 
 Alerts, top-ups and ticket issuing belong to other functions and are only stood in for by demo data.
 
-- `backend`: Java 17, plain JDK HTTP server, Jackson, JUnit 4, Maven. No framework.
+- `backend`: Java 17, plain JDK HTTP server, plain JDBC, an embedded H2 database, Jackson, JUnit 4, Maven. No framework.
 - `frontend`: React and Vite. It only displays what the server decides. Two screens: sign-up and log-in first, then the Reader once a customer has logged in.
 - `docs/rules.md`: every business rule as one testable sentence.
 - `docs/design.md`: the model, the state machines, the API and the design patterns.
@@ -25,7 +25,7 @@ mvn package                    # builds target/metrolink-journey-execution.jar
 java -jar target/metrolink-journey-execution.jar
 ```
 
-It listens on port 4000. Set `PORT` to use another. Data lives in memory and starts fresh each run.
+It listens on port 4000. Set `PORT` to use another. Data is kept in a database file, so it is still there after a restart (see "Database" below). Nothing needs installing: the database runs inside the server.
 
 Frontend (needs Node 22 or later), in a second terminal:
 
@@ -39,7 +39,7 @@ Open http://localhost:5173. The dev server forwards `/api` to port 4000. The fir
 
 ## Try it
 
-Demo passengers and tickets are created for today's date every time the server starts. "Start over with demo data" in the screen restores them at any time.
+Demo passengers and tickets are created the first time the server starts with an empty database, dated for that day. After that they stay as they are, including any journeys you made. "Start over with demo data" in the screen empties the database and loads them again, dated for the day the server started. On a later day the old tickets are for the wrong day, so press it once to get tickets for that day.
 
 The Reader shows only the logged-in customer's tickets, so log in as the owner of the ticket you want. Every demo customer's password is `Demo@1234`.
 
@@ -66,7 +66,7 @@ The Reader shows only the logged-in customer's tickets, so log in as the owner o
 
 ## Try customer onboarding
 
-Start on the first screen, which has the sign-up form and the log-in form. Registrations are kept in memory, and "Start over with demo data" forgets them.
+Start on the first screen, which has the sign-up form and the log-in form. Registrations are kept in the database, so a customer who registered is still there after the server restarts. "Start over with demo data" removes them.
 
 | What to do | What you should see |
 |---|---|
@@ -81,6 +81,31 @@ Start on the first screen, which has the sign-up form and the log-in form. Regis
 | Log in as the new customer, and press Add 50 under "Your account" | The balance goes up, but there are no tickets: issuing tickets is another function |
 
 The rules are O1 to O9 in `docs/rules.md`. Section 8 of `docs/design.md` shows how each message in the sequence diagram maps to code.
+
+## Database
+
+The server keeps its data in an [H2](https://www.h2database.com) database, an SQL database that runs inside the Java program, so there is nothing to install. By default the data is the file `data/metrolink.mv.db`, created next to where you start the server (`backend/data/` if you start it from `backend`). The `data` folder is ignored by Git.
+
+| Setting | Meaning | Default |
+|---|---|---|
+| `METROLINK_DB` | A JDBC URL, or `memory` to keep everything in memory and forget it on exit | `jdbc:h2:file:./data/metrolink;AUTO_SERVER=TRUE;WRITE_DELAY=0` |
+| `METROLINK_DB_USER` | Database user | `sa` |
+| `METROLINK_DB_PASSWORD` | Database password | empty |
+
+Setting one for a single run, in PowerShell and in bash:
+
+```
+$env:METROLINK_DB = "memory"; java -jar target/metrolink-journey-execution.jar        # PowerShell: nothing saved
+METROLINK_DB=memory java -jar target/metrolink-journey-execution.jar                   # bash: nothing saved
+```
+
+- **First start.** The tables are created from `backend/src/main/resources/lk/metrolink/journey/repository/jdbc/schema.sql`, then the network and demo data are loaded. Later starts leave the data exactly as it is.
+- **Looking inside.** Because of `AUTO_SERVER=TRUE`, a tool can open the same database while the server runs. With the [H2 console](https://www.h2database.com/html/tutorial.html#console_settings) or DBeaver, use the same URL (give the full path to the file), user `sa` and an empty password. Tables: `passengers`, `credentials`, `accounts`, `tickets`, `journeys`, `fare_transactions`, `stops`, `routes`, `route_stops`, `fare_rules`, `id_counters`.
+- **Stopping.** Each change is written to disk before the server answers (`WRITE_DELAY=0`), so a customer who was told "account opened" is still there even if the server is killed instead of stopped, for example by an IDE's stop button. If you give your own H2 URL, keep that option.
+- **Start over.** "Start over with demo data" deletes every row and loads the demo data again. To start completely fresh, stop the server and delete the `data` folder.
+- **Another database.** `schema.sql` uses plain SQL, so it should also run on PostgreSQL or MySQL: add that database's driver to the `pom.xml` and give its URL in `METROLINK_DB`. Only H2 has been tested.
+
+The tests run every store-dependent test twice, once on the in-memory store and once on H2, so both behave the same way.
 
 ## API
 
@@ -102,7 +127,7 @@ backend/src/main/java/lk/metrolink/journey
   domain/        Passenger, Account (permanent and temporary), QRTicket, Journey, Route, FareRule, states,
                  OnboardingRequest (what a registration may contain), PasswordHash
   fare/          FareCalculator and the distance and flat strategies
-  repository/    interfaces, plus memory/ with the in-memory database and unit of work
+  repository/    interfaces and Store, plus memory/ (in-memory store) and jdbc/ (SQL store, schema.sql)
   service/       JourneyService (the workflow), ReaderService (the front door), QueryService,
                  OnboardingService (register and log in)
   web/           HTTP server, routes, validation

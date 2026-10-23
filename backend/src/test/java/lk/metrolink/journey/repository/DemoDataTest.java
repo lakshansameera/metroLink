@@ -14,36 +14,33 @@ import lk.metrolink.journey.domain.QRTicket;
 import lk.metrolink.journey.domain.Resident;
 import lk.metrolink.journey.domain.Route;
 import lk.metrolink.journey.fare.FareCalculator;
-import lk.metrolink.journey.repository.memory.InMemoryAccountRepository;
-import lk.metrolink.journey.repository.memory.InMemoryCredentialRepository;
-import lk.metrolink.journey.repository.memory.InMemoryDatabase;
-import lk.metrolink.journey.repository.memory.InMemoryFareRuleRepository;
-import lk.metrolink.journey.repository.memory.InMemoryPassengerRepository;
-import lk.metrolink.journey.repository.memory.InMemoryRouteRepository;
-import lk.metrolink.journey.repository.memory.InMemoryTicketRepository;
 import org.junit.Before;
 import org.junit.Test;
 
-public class DemoDataTest {
+public class DemoDataTest extends OnEveryStore {
 
     private static final LocalDate TODAY = LocalDate.parse("2026-10-21");
     private static final Instant NOON = Instant.parse("2026-10-21T06:30:00Z");
 
-    private InMemoryDatabase db;
+    private Store store;
+    private UnitOfWork db;
     private TicketRepository tickets;
     private AccountRepository accounts;
     private PassengerRepository passengers;
     private RouteRepository routes;
     private FareRuleRepository fareRules;
+    private CredentialRepository credentials;
 
     @Before
     public void setUp() {
-        db = InMemoryDatabase.seeded(TODAY);
-        tickets = new InMemoryTicketRepository(db);
-        accounts = new InMemoryAccountRepository(db);
-        passengers = new InMemoryPassengerRepository(db);
-        routes = new InMemoryRouteRepository(db);
-        fareRules = new InMemoryFareRuleRepository(db);
+        store = open(TODAY);
+        db = store.unitOfWork();
+        tickets = store.tickets();
+        accounts = store.accounts();
+        passengers = store.passengers();
+        routes = store.routes();
+        fareRules = store.fareRules();
+        credentials = store.credentials();
     }
 
     @Test
@@ -114,16 +111,14 @@ public class DemoDataTest {
 
     @Test
     public void todayInColomboIsAValidSeedDay() {
-        InMemoryDatabase real = InMemoryDatabase.seeded(Dates.today());
+        Store real = open(Dates.today());
 
-        assertEquals(10, real.run(() -> new InMemoryTicketRepository(real).list().size()).intValue());
+        assertEquals(10, real.unitOfWork().run(() -> real.tickets().list().size()).intValue());
     }
 
 
     @Test
     public void everyDemoPassengerHasAPasswordThatIsTheDemoPassword() {
-        CredentialRepository credentials = new InMemoryCredentialRepository(db);
-
         db.execute(() -> {
             for (Passenger passenger : passengers.list()) {
                 PasswordHash hash = credentials.findByPassenger(passenger.getPassengerId()).orElseThrow();
@@ -138,7 +133,7 @@ public class DemoDataTest {
         db.execute(() -> passengers.insert(new Passenger(0, "Amaya", "amaya@example.com", new Resident())));
         assertEquals(6, db.run(() -> passengers.list()).size());
 
-        db.reset(TODAY);
+        store.reset(TODAY);
 
         assertEquals(5, db.run(() -> passengers.list()).size());
         assertTrue(db.run(() -> passengers.findByEmail("amaya@example.com")).isEmpty());

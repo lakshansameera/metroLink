@@ -9,6 +9,7 @@ import static org.junit.Assert.fail;
 
 import java.util.List;
 import lk.metrolink.journey.domain.NotFoundException;
+import lk.metrolink.journey.repository.OnEveryStore;
 import lk.metrolink.journey.service.ReaderDisplay.Tone;
 import lk.metrolink.journey.service.view.JourneyView;
 import lk.metrolink.journey.service.view.PassengerView;
@@ -16,7 +17,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 /** The reader turns results into a tone and a sentence; the query service names things for the screens. */
-public class ReaderServiceTest {
+public class ReaderServiceTest extends OnEveryStore {
 
     private Fixture f;
     private ReaderService reader;
@@ -25,10 +26,10 @@ public class ReaderServiceTest {
 
     @Before
     public void setUp() {
-        f = new Fixture();
+        f = new Fixture(open(Fixture.TODAY));
         queries = new QueryService(f.db, f.passengers, f.accounts, f.tickets, f.journeys, f.transactions, f.routes);
         reader = new ReaderService(f.db, f.journeyService, f.routes, queries);
-        testData = new TestDataService(f.db, f.accountService, f.accounts, queries, () -> f.db.reset(Fixture.TODAY));
+        testData = new TestDataService(f.db, f.accountService, f.accounts, queries, () -> f.store.reset(Fixture.TODAY));
     }
 
     private ReaderDisplay tap(String qr, ScanDirection direction, String stop) {
